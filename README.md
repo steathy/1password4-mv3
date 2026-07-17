@@ -60,35 +60,46 @@ messaging should work with no further setup.
 If native messaging does not connect, the `ws://127.0.0.1` fallback should still
 engage automatically; watch the console for `[AGENT:WS]` lines.
 
-## Install for real (one-click force-install, no developer-mode nag)
+## Install (one command)
 
-This installs the extension as a Chrome **force-installed** extension: no
-developer-mode nag, and it can't be silently disabled. (A plain external local-crx
-install would get blocked by Chrome's "Web Store only" rule; force-installed
-extensions are exempt.) A pre-built, signed crx is committed in [`dist/`](dist/),
-so **no build tools are needed** on the target machine.
+Open **Windows PowerShell** and run:
 
-**On the machine you want it (e.g. a laptop):**
+```powershell
+irm https://raw.githubusercontent.com/YOUR_GH_USER/1password4-mv3/main/install.ps1 | iex
+```
 
-1. Clone this repo (or copy it somewhere permanent — the policy points at the crx
-   by absolute path).
-2. Double-click **`install.bat`** (or right-click `install.ps1` → **Run with
-   PowerShell**). It self-elevates (one UAC prompt), writes the update manifest +
-   `ExtensionInstallForcelist` policy, and restarts Chrome.
-3. `chrome://extensions` shows 1Password as **"Installed by policy."** It re-pairs
-   with the desktop app once automatically (the packed build has its own extension
-   ID). If you also had a Load-unpacked copy, remove it so you don't run two.
+It downloads this repo, then shows a menu:
 
-**To uninstall:** run **`uninstall.ps1`** (self-elevates, removes the policy,
-restarts Chrome).
+```
+[1] Force install   (recommended; needs admin, no dev-mode nag, can't be disabled)
+[2] Load unpacked   (no admin; you click 'Load unpacked' once)
+[3] Uninstall       (remove force-install policy)
+```
+
+- **Force install** self-elevates (one UAC prompt), writes an `ExtensionInstallForcelist`
+  policy pointing at the bundled signed crx, and restarts Chrome. `chrome://extensions`
+  then shows 1Password as **"Installed by policy."** It re-pairs with the desktop app
+  once (the packed build has its own extension ID). A plain local-crx install would be
+  blocked by Chrome's "Web Store only" rule — force-installed extensions are exempt.
+- **Load unpacked** stages the files under `%LOCALAPPDATA%\1Password4-MV3\src`, opens
+  `chrome://extensions`, and copies the path to your clipboard; you flip on Developer
+  mode and click **Load unpacked**. No admin.
+
+> `irm … | iex` runs remote code — review [`install.ps1`](install.ps1) first if you like.
+> The same script works from a local clone too: double-click **`install.bat`**.
 
 No `allowed_origins` / native-messaging step is needed — on Windows the extension
 connects over `ws://127.0.0.1`, which authenticates by pairing secret, not by
 extension ID (see [`docs/design.md`](docs/design.md), Component 5).
 
-**Rebuilding after changing `src/`:** run `build\pack.ps1` (needs Chrome + Node).
-It re-signs the crx and refreshes `dist/onepassword-mv3.crx` + `dist/extension.json`;
-commit those, then re-run `install.ps1` on each machine.
+**Uninstall:** menu option 3, or run [`uninstall.ps1`](uninstall.ps1).
+
+**Rebuild after changing `src/`:** run `build\pack.ps1` (needs Chrome + Node). It
+re-signs the crx and refreshes `dist/onepassword-mv3.crx` + `dist/extension.json`;
+commit those and the one-command install picks them up.
+
+> Publishing: set `$Owner` / `$Repo` / `$Branch` at the top of `install.ps1` to your
+> GitHub repo before pushing, and use your account in the `irm` URL above.
 
 ## Layout
 
