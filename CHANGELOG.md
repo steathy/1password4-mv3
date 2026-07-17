@@ -5,6 +5,21 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). (The version here is the *port's*
 release version; the bundled extension keeps its own `4.7.5.90` manifest version.)
 
+## [1.0.2] - 2026-07-17
+
+### Changed
+- **Load-unpacked is now the recommended install; force-install is documented as
+  enterprise-managed-only.** Testing on a second PC showed Chrome refuses to
+  policy-install any off-Web-Store extension on a device that isn't enterprise
+  managed (`chrome://policy` reports `[BLOCKED]` / *"not detected as enterprise
+  managed"*) — so self-hosted force-install (whether `file://` or https) can't work
+  on a normal personal machine. The installer now:
+  - lists **Load unpacked** first as `[1]` (recommended, works on any PC);
+  - detects a non-managed device before force-installing and offers to switch to
+    load-unpacked instead of silently producing a blocked policy.
+- README documents the managed-device requirement and the Chrome Browser Cloud
+  Management route for those who want the no-nag force-install anyway.
+
 ## [1.0.1] - 2026-07-17
 
 ### Fixed
@@ -59,5 +74,6 @@ on 1Password 4.6.1.618 (Windows 10).
   native-messaging host on Windows, so the native-messaging attempt always falls
   back — cosmetic, no performance impact.
 
+[1.0.2]: https://github.com/steathy/1password4-mv3/releases/tag/v1.0.2
 [1.0.1]: https://github.com/steathy/1password4-mv3/releases/tag/v1.0.1
 [1.0.0]: https://github.com/steathy/1password4-mv3/releases/tag/v1.0.0

@@ -30,10 +30,22 @@ $Branch = 'main'
 
 $InstallDir = Join-Path $env:LOCALAPPDATA '1Password4-MV3'
 $RawBase    = "https://raw.githubusercontent.com/$Owner/$Repo/$Branch"
-# Chrome force-installs by fetching this update manifest (and the crx it points to)
-# over https from GitHub. Reliable everywhere; a local file:// manifest is not.
+# Force-install fetches this manifest (and the crx it points to) over https from
+# GitHub. NOTE: Chrome only honors off-Web-Store force-install on ENTERPRISE-MANAGED
+# devices; on a normal personal PC it is blocked, so load-unpacked is the default.
 $UpdateUrl  = "$RawBase/dist/updates.xml"
 
+function Test-Managed {
+  # Chrome allows off-Web-Store force-install only on enterprise-managed devices.
+  try { if ((Get-CimInstance Win32_ComputerSystem -ErrorAction Stop).PartOfDomain) { return $true } } catch {}
+  try {
+    $ds = (& dsregcmd /status 2>$null) -join "`n"
+    if ($ds -match 'AzureAdJoined\s*:\s*YES' -or
+        $ds -match 'DomainJoined\s*:\s*YES' -or
+        $ds -match 'EnterpriseJoined\s*:\s*YES') { return $true }
+  } catch {}
+  return $false
+}
 function Test-Admin {
   (New-Object Security.Principal.WindowsPrincipal(
     [Security.Principal.WindowsIdentity]::GetCurrent())
@@ -99,7 +111,19 @@ function Invoke-Elevated($payload, $modeName) {
 
 function Install-Force($payload) {
   $extId = (Get-Content (Join-Path $payload 'dist\extension.json') -Raw | ConvertFrom-Json).id
-  if (-not (Test-Admin)) { Invoke-Elevated $payload 'force'; return }
+  if (-not (Test-Admin)) {
+    if (-not (Test-Managed)) {
+      Write-Host ""
+      Write-Host "This PC is not enterprise-managed, so Chrome will BLOCK a force-install of" -ForegroundColor Yellow
+      Write-Host "any extension that isn't in the Chrome Web Store (chrome://policy shows it as" -ForegroundColor Yellow
+      Write-Host "[BLOCKED]). Load unpacked works on any PC and is the recommended option." -ForegroundColor Yellow
+      if ((Read-Host "Use Load unpacked instead? [Y/n]").Trim().ToLower() -ne 'n') {
+        Install-Unpacked $payload; return
+      }
+      Write-Host "Proceeding with force-install anyway (only works once the device is managed)."
+    }
+    Invoke-Elevated $payload 'force'; return
+  }
 
   # Policy value: "<id>;<update-manifest-url>". The manifest and crx are served over
   # https from GitHub, so nothing local needs to persist for force-install.
@@ -164,13 +188,13 @@ if (-not $Mode) {
   Write-Host ""
   Write-Host "  1Password 4  -  MV3 port for Chrome"
   Write-Host "  ----------------------------------"
-  Write-Host "  [1] Force install   (recommended; needs admin, no dev-mode nag)"
-  Write-Host "  [2] Load unpacked   (no admin; one manual click)"
+  Write-Host "  [1] Load unpacked   (recommended; works on any PC, no admin)"
+  Write-Host "  [2] Force install   (no dev-mode nag, but ENTERPRISE-MANAGED devices only)"
   Write-Host "  [3] Uninstall       (remove force-install policy)"
   Write-Host "  [Q] Quit"
   switch ((Read-Host "Choose").Trim().ToLower()) {
-    '1' { $Mode = 'force' }
-    '2' { $Mode = 'unpacked' }
+    '1' { $Mode = 'unpacked' }
+    '2' { $Mode = 'force' }
     '3' { $Mode = 'uninstall' }
     default { return }
   }

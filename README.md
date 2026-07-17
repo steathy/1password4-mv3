@@ -82,31 +82,43 @@ irm https://raw.githubusercontent.com/steathy/1password4-mv3/main/install.ps1 | 
 It downloads this repo, then shows a menu:
 
 ```
-[1] Force install   (recommended; needs admin, no dev-mode nag, can't be disabled)
-[2] Load unpacked   (no admin; you click 'Load unpacked' once)
+[1] Load unpacked   (recommended; works on any PC, no admin)
+[2] Force install   (no dev-mode nag, but ENTERPRISE-MANAGED devices only)
 [3] Uninstall       (remove force-install policy)
 ```
 
-- **Force install** self-elevates (one UAC prompt), writes an `ExtensionInstallForcelist`
-  policy pointing Chrome at the signed crx **hosted on GitHub over https**, and
-  restarts Chrome. `chrome://extensions` then shows 1Password as **"Installed by policy."** It re-pairs with the desktop app
-  once (the packed build has its own extension ID). A plain local-crx install would be
-  blocked by Chrome's "Web Store only" rule — force-installed extensions are exempt.
-- **Load unpacked** stages the files under `%LOCALAPPDATA%\1Password4-MV3\src`, opens
-  `chrome://extensions`, and copies the path to your clipboard; you flip on Developer
-  mode and click **Load unpacked**. No admin.
+- **Load unpacked** (recommended) stages the files under
+  `%LOCALAPPDATA%\1Password4-MV3\src`, opens `chrome://extensions`, and copies the
+  path to your clipboard; you flip on **Developer mode** and click **Load unpacked**.
+  No admin, works on any machine. The only downside is Chrome's "Disable
+  developer-mode extensions" bubble at startup, which you dismiss.
+- **Force install** writes an `ExtensionInstallForcelist` policy pointing Chrome at
+  the signed crx hosted on GitHub over https — no dev-mode nag, can't be disabled.
+  **But it only works on enterprise-managed devices.** On a normal personal PC,
+  Chrome **blocks** policy-installing any extension that isn't in the Chrome Web
+  Store (`chrome://policy` shows it as `[BLOCKED]` with *"not detected as enterprise
+  managed"*). The installer detects this and offers to switch you to load-unpacked.
+  See [Force install on a personal PC](#force-install-on-a-personal-pc) below.
 
 > `irm … | iex` runs remote code — review [`install.ps1`](install.ps1) first if you like.
 > The same script works from a local clone too: double-click **`install.bat`**.
 
-> **Force install** fetches the crx from GitHub over **https**, so nothing local has
-> to persist for it (you just need internet to install and to auto-update).
-> **Load unpacked**, by contrast, reads the extension directly from its folder
-> (`%LOCALAPPDATA%\1Password4-MV3\src` or your clone) on **every** Chrome launch —
-> keep that folder in place or the extension disappears.
->
-> To remove cleanly: for force-install use **Uninstall** (clears the policy); for
-> load-unpacked, remove it from `chrome://extensions`, then delete the folder.
+> **Keep the load-unpacked folder in place.** Load unpacked reads the extension
+> directly from its folder (`%LOCALAPPDATA%\1Password4-MV3\src` or your clone) on
+> **every** Chrome launch — move or delete it and the extension disappears. To
+> remove it, use `chrome://extensions` → Remove, then delete the folder.
+
+### Force install on a personal PC
+
+Chrome only honors off-Web-Store force-install on **enterprise-managed** devices
+(AD domain, Azure AD, or MDM enrolled). To get the no-nag force-install on a
+personal machine you have to make Chrome see the device as managed — the clean,
+legitimate way is free **[Chrome Browser Cloud Management](https://support.google.com/chrome/a/answer/9116814)**:
+create an enrollment token in the Google Admin console and set it at
+`HKLM\SOFTWARE\Policies\Google\Chrome\CloudManagementEnrollmentToken`. After that,
+re-run the installer's force-install. (Faking Windows MDM/domain state in the
+registry also works but is invasive and not recommended.) If you'd rather not, just
+use **load-unpacked** — it does the same job with a dismissable startup bubble.
 
 No `allowed_origins` / native-messaging step is needed — on Windows the extension
 connects over `ws://127.0.0.1`, which authenticates by pairing secret, not by
