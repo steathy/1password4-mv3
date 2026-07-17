@@ -183,8 +183,25 @@ The authenticated session and derived `payloadKey` live in memory
 ### Component 5 — Transports (kept, unchanged)
 
 Native messaging (`2bua8c4s2c.com.agilebits.1password`) and the `ws://127.0.0.1`
-port-scan fallback both work from an MV3 SW. We change neither; we only ensure the
-extension ID is authorized (Component 6).
+port-scan fallback both work from an MV3 SW. We change neither.
+
+**Field finding (Windows): WebSocket is the only real transport.** On the test
+machine, 1Password 4.6.1 (`D:\Program Files (x86)\1Password 4\`) ships **no
+native-messaging host** — no host manifest JSON anywhere in the install, and
+`Agile1pAgent.exe` (the process listening on port 6263) contains none of the
+native-messaging markers (`allowed_origins`, `nativeMessaging`, `stdin`,
+`NativeMessagingHosts`); it is purely a WebSocket server. The extension's
+`connectNative` attempt is macOS-oriented code that on Windows always fails with
+"Specified native messaging host not found." and falls back to `ws://127.0.0.1` —
+in Chrome, Edge, and Vivaldi alike. The resulting console lines are cosmetic and
+one-time-per-connect, with no performance cost. Consequences:
+
+- There is nothing to register for native messaging, and no `allowed_origins` to
+  edit, so **Component 6's ID-authorization step is unnecessary on Windows** — the
+  packed `.crx` build (different signing-key ID) connects over WebSocket regardless
+  of ID.
+- The WebSocket handshake authenticates by the `extId`/`extSecret` pairing, not the
+  Chrome extension ID.
 
 ### Component 6 — Install + ID authorization (Windows)
 
