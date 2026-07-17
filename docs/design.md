@@ -132,6 +132,41 @@ That collapses the design to two static pieces:
 This is strictly simpler and more robust than the originally-planned dynamic session
 rules.
 
+### Component 7 — First-run pairing without the retired agilebits.com page
+
+**Discovered during testing.** A *fresh* install (no cached pairing, unlike Edge/
+Vivaldi which paired years ago) must complete the first-time pairing handshake. The
+engine drives that by opening `https://agilebits.com/browsers/auth.html` — a domain
+1Password retired after rebranding, so the tab dies with `DNS_PROBE_FINISHED_NXDOMAIN`
+and pairing stalls. (This is transport-agnostic and not MV3-specific; it would break
+on any current browser doing a fresh pair.)
+
+Tracing the engine settled what that page actually does:
+
+- The app sends `authNew` with a `code`. `register()` runs
+  `h ? r.Yb() : this.tb()` — with a code it opens the page **only to display the
+  code** for the user to eyeball; without a code it calls `tb()` and self-completes.
+- The code is **never echoed back to the app**. Both paths finish pairing with the
+  identical wire message `authRegister {extId, method, secret}` (`register → tb →
+  Agent.Rc`). The page's `authCodeReady` reply just calls the same `tb()`. So the
+  app does not verify the code — it is browser-side UX only.
+
+**Fix (in `sw-bootstrap.js`, no engine edit):** after `importScripts`, wrap the
+globally-exposed `self.AgentHandlers.authNew` to delete the `code` before the engine
+sees it. `register()` then takes the no-page branch and self-completes, producing
+byte-for-byte the same handshake the original auto-confirming page produced. The
+(also-dead) first-run welcome page is suppressed by pre-setting `welcomeScreenShown`.
+
+*Security note:* the discarded code was an anti-phishing visual check (compare the
+browser's code against the app's). On a local single-user machine pairing a known
+extension, dropping it is acceptable; the encrypted channel's security rests on the
+per-pairing `secret`, which is unaffected.
+
+*Alternative considered:* copying an already-paired browser's `chrome.storage.local`
+credential (`OPExtensionIdentifier` + `extSecret`) into Chrome. Rejected as the
+default because it makes Chrome share another browser's `extId`, so the two cannot
+connect to 1Password concurrently. The bypass gives Chrome its own identity.
+
 ### Component 4 — Service-worker lifecycle / keep-alive
 
 The authenticated session and derived `payloadKey` live in memory

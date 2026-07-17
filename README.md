@@ -32,6 +32,15 @@ byte-for-byte. Everything MV3-specific lives in one small file,
 Then it `importScripts()` the engine and starts a keep-alive so the authenticated
 session to the desktop app survives the service worker's idle timer.
 
+It also handles **first-run pairing**. A fresh install must pair with the desktop
+app, and the engine does that by opening `agilebits.com/browsers/auth.html` — a
+domain 1Password retired, so the page is dead. That page only *displayed* a
+verification code; the code is never sent back to the app, and pairing completes
+with the same `authRegister {extId, secret}` message either way. So the bootstrap
+strips the `code` from the incoming `authNew` message, which makes the engine
+self-complete the pairing with no page. See [`docs/design.md`](docs/design.md)
+(Component 7) for the full trace.
+
 ## Quick start (development — no packaging)
 
 This is the fastest way to test. Because `src/manifest.json` keeps 1Password's
