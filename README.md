@@ -60,40 +60,35 @@ messaging should work with no further setup.
 If native messaging does not connect, the `ws://127.0.0.1` fallback should still
 engage automatically; watch the console for `[AGENT:WS]` lines.
 
-## Install for real (force-install, no developer-mode nag)
+## Install for real (one-click force-install, no developer-mode nag)
 
-Once it works in dev, package it and install it as a Chrome **force-installed**
-extension so Chrome stops nagging and can't silently disable it. (A plain
-external-extension local-crx install would get disabled by Chrome's "Web Store
-only" rule; force-installed extensions are exempt.)
+This installs the extension as a Chrome **force-installed** extension: no
+developer-mode nag, and it can't be silently disabled. (A plain external local-crx
+install would get blocked by Chrome's "Web Store only" rule; force-installed
+extensions are exempt.) A pre-built, signed crx is committed in [`dist/`](dist/),
+so **no build tools are needed** on the target machine.
 
-```powershell
-# from the repo root
-powershell -ExecutionPolicy Bypass -File .\build\pack.ps1
-```
+**On the machine you want it (e.g. a laptop):**
 
-This produces, in `build/` (all gitignored):
+1. Clone this repo (or copy it somewhere permanent — the policy points at the crx
+   by absolute path).
+2. Double-click **`install.bat`** (or right-click `install.ps1` → **Run with
+   PowerShell**). It self-elevates (one UAC prompt), writes the update manifest +
+   `ExtensionInstallForcelist` policy, and restarts Chrome.
+3. `chrome://extensions` shows 1Password as **"Installed by policy."** It re-pairs
+   with the desktop app once automatically (the packed build has its own extension
+   ID). If you also had a Load-unpacked copy, remove it so you don't run two.
 
-- `onepassword-mv3.crx` — the signed package. **Leave it where it is**; the policy
-  points at this exact path.
-- `key.pem` — the signing key (**keep it**; it fixes the extension ID).
-- `updates.xml` — the Omaha update manifest the policy fetches the crx from.
-- `forcelist-install.reg` — the `ExtensionInstallForcelist` policy under **HKCU**
-  (no admin needed on a personal machine); `forcelist-install-hklm.reg` is the
-  HKLM equivalent if HKCU is ignored; `forcelist-uninstall.reg` removes it.
-
-Then:
-
-1. `reg import build\forcelist-install.reg`, then fully restart Chrome
-   (`chrome://restart`).
-2. 1Password appears on `chrome://extensions` as **"Installed by policy."** The
-   packed build is signed with **your** key, so its ID differs from the unpacked
-   one — it re-pairs itself once automatically (via the bootstrap's pairing
-   bypass). After it works, **remove the Load-unpacked copy** so you don't run two.
+**To uninstall:** run **`uninstall.ps1`** (self-elevates, removes the policy,
+restarts Chrome).
 
 No `allowed_origins` / native-messaging step is needed — on Windows the extension
 connects over `ws://127.0.0.1`, which authenticates by pairing secret, not by
 extension ID (see [`docs/design.md`](docs/design.md), Component 5).
+
+**Rebuilding after changing `src/`:** run `build\pack.ps1` (needs Chrome + Node).
+It re-signs the crx and refreshes `dist/onepassword-mv3.crx` + `dist/extension.json`;
+commit those, then re-run `install.ps1` on each machine.
 
 ## Layout
 
@@ -107,7 +102,10 @@ src/                    the loadable / packable MV3 extension
   ext/sjcl.js           crypto library, unmodified
   fillStyle.css         content-script styles, unmodified
   assets/               icons
-build/                  packaging + install tooling (artifacts gitignored)
+build/                  pack.ps1 + compute-id.js (rebuild the crx; key.pem gitignored)
+dist/                   committed install artifacts: signed crx + extension.json
+install.ps1 / .bat      one-click force-install (self-elevating)
+uninstall.ps1           remove the force-install policy
 docs/                   design spec
 ```
 
