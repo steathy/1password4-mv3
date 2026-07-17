@@ -5,6 +5,23 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). (The version here is the *port's*
 release version; the bundled extension keeps its own `4.7.5.90` manifest version.)
 
+## [1.0.1] - 2026-07-17
+
+### Fixed
+- **Force install now works reliably on a fresh machine.** The previous release
+  pointed the `ExtensionInstallForcelist` policy at a local `file://` update
+  manifest, which many Chrome builds silently reject — so the policy was set but
+  nothing installed. The crx and its `updates.xml` are now served over **https from
+  GitHub**, which Chrome accepts (verified `Content-Type: application/octet-stream`).
+  As a bonus, force-install no longer needs any local file to persist.
+- **Chrome restart in the installer.** `chrome.exe chrome://restart` only opened a
+  new window instead of restarting; the installer now gracefully closes and relaunches
+  Chrome so the policy is actually applied.
+
+### Changed
+- `dist/updates.xml` is now a committed static manifest (https crx codebase);
+  `build/pack.ps1` regenerates it and takes `-Owner/-Repo/-Branch`.
+
 ## [1.0.0] - 2026-07-16
 
 First working release. The legacy 1Password 4 extension loads and works in current
@@ -42,4 +59,5 @@ on 1Password 4.6.1.618 (Windows 10).
   native-messaging host on Windows, so the native-messaging attempt always falls
   back — cosmetic, no performance impact.
 
+[1.0.1]: https://github.com/steathy/1password4-mv3/releases/tag/v1.0.1
 [1.0.0]: https://github.com/steathy/1password4-mv3/releases/tag/v1.0.0

@@ -88,8 +88,8 @@ It downloads this repo, then shows a menu:
 ```
 
 - **Force install** self-elevates (one UAC prompt), writes an `ExtensionInstallForcelist`
-  policy pointing at the bundled signed crx, and restarts Chrome. `chrome://extensions`
-  then shows 1Password as **"Installed by policy."** It re-pairs with the desktop app
+  policy pointing Chrome at the signed crx **hosted on GitHub over https**, and
+  restarts Chrome. `chrome://extensions` then shows 1Password as **"Installed by policy."** It re-pairs with the desktop app
   once (the packed build has its own extension ID). A plain local-crx install would be
   blocked by Chrome's "Web Store only" rule — force-installed extensions are exempt.
 - **Load unpacked** stages the files under `%LOCALAPPDATA%\1Password4-MV3\src`, opens
@@ -99,16 +99,14 @@ It downloads this repo, then shows a menu:
 > `irm … | iex` runs remote code — review [`install.ps1`](install.ps1) first if you like.
 > The same script works from a local clone too: double-click **`install.bat`**.
 
-> **Keep the installed files — don't delete or move them.** Both install types load
-> from the folder they're staged in (`%LOCALAPPDATA%\1Password4-MV3\` for a
-> one-command install, or your clone folder locally):
-> - *Load unpacked* reads the extension directly from `…\src` on **every** Chrome
->   launch — move or delete it and the extension disappears.
-> - *Force install* is an ongoing policy that re-checks the crx path at startup, so
->   the crx must stay too.
+> **Force install** fetches the crx from GitHub over **https**, so nothing local has
+> to persist for it (you just need internet to install and to auto-update).
+> **Load unpacked**, by contrast, reads the extension directly from its folder
+> (`%LOCALAPPDATA%\1Password4-MV3\src` or your clone) on **every** Chrome launch —
+> keep that folder in place or the extension disappears.
 >
 > To remove cleanly: for force-install use **Uninstall** (clears the policy); for
-> load-unpacked, remove it from `chrome://extensions` first, then delete the folder.
+> load-unpacked, remove it from `chrome://extensions`, then delete the folder.
 
 No `allowed_origins` / native-messaging step is needed — on Windows the extension
 connects over `ws://127.0.0.1`, which authenticates by pairing secret, not by

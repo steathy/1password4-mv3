@@ -29,6 +29,10 @@ $Branch = 'main'
 # ======================================================
 
 $InstallDir = Join-Path $env:LOCALAPPDATA '1Password4-MV3'
+$RawBase    = "https://raw.githubusercontent.com/$Owner/$Repo/$Branch"
+# Chrome force-installs by fetching this update manifest (and the crx it points to)
+# over https from GitHub. Reliable everywhere; a local file:// manifest is not.
+$UpdateUrl  = "$RawBase/dist/updates.xml"
 
 function Test-Admin {
   (New-Object Security.Principal.WindowsPrincipal(
@@ -43,11 +47,18 @@ function Find-Chrome {
   ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 }
 function Restart-Chrome {
+  # Reliably restart Chrome so it re-reads policy. `chrome.exe chrome://restart`
+  # from the CLI only opens a window, so close Chrome gracefully and relaunch.
   $exe = Find-Chrome
-  if ($exe -and (Get-Process chrome -ErrorAction SilentlyContinue)) {
-    Write-Host "Restarting Chrome (tabs will be restored)..."
-    Start-Process $exe "chrome://restart"
-  } elseif ($exe) {
+  $running = Get-Process chrome -ErrorAction SilentlyContinue
+  if ($running) {
+    Write-Host "Closing Chrome to apply the policy..."
+    foreach ($p in $running) { try { $p.CloseMainWindow() | Out-Null } catch {} }
+    Start-Sleep -Seconds 3
+    $still = Get-Process chrome -ErrorAction SilentlyContinue
+    if ($still) { try { $still | Stop-Process -Force -ErrorAction SilentlyContinue } catch {}; Start-Sleep -Seconds 1 }
+    if ($exe) { Start-Process $exe; Write-Host "Chrome relaunched." }
+  } else {
     Write-Host "Start Chrome to activate."
   }
 }
@@ -87,22 +98,11 @@ function Invoke-Elevated($payload, $modeName) {
 }
 
 function Install-Force($payload) {
+  $extId = (Get-Content (Join-Path $payload 'dist\extension.json') -Raw | ConvertFrom-Json).id
   if (-not (Test-Admin)) { Invoke-Elevated $payload 'force'; return }
-  $crx     = Join-Path $payload 'dist\onepassword-mv3.crx'
-  $meta    = Get-Content (Join-Path $payload 'dist\extension.json') -Raw | ConvertFrom-Json
-  $extId   = $meta.id; $version = $meta.version
-  $updates = Join-Path $payload 'dist\updates.xml'
-  $crxUrl  = 'file:///' + ($crx -replace '\\', '/')
-  @"
-<?xml version='1.0' encoding='UTF-8'?>
-<gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
-  <app appid='$extId'>
-    <updatecheck codebase='$crxUrl' version='$version' />
-  </app>
-</gupdate>
-"@ | Set-Content -Path $updates -Encoding UTF8
-  $updateUrl = 'file:///' + ($updates -replace '\\', '/')
 
+  # Policy value: "<id>;<update-manifest-url>". The manifest and crx are served over
+  # https from GitHub, so nothing local needs to persist for force-install.
   $key = 'HKLM:\SOFTWARE\Policies\Google\Chrome\ExtensionInstallForcelist'
   New-Item -Path $key -Force | Out-Null
   $item = Get-Item -Path $key; $target = $null; $max = 0
@@ -112,12 +112,12 @@ function Install-Force($payload) {
     if ($n -match '^\d+$' -and [int]$n -gt $max) { $max = [int]$n }
   }
   if (-not $target) { $target = [string]($max + 1) }
-  Set-ItemProperty -Path $key -Name $target -Value "$extId;$updateUrl"
+  Set-ItemProperty -Path $key -Name $target -Value "$extId;$UpdateUrl"
 
-  Write-Host "Force-install policy set for $extId (v$version)." -ForegroundColor Green
+  Write-Host "Force-install policy set: $extId -> $UpdateUrl" -ForegroundColor Green
   Restart-Chrome
-  Write-Host "chrome://extensions shows 'Installed by policy'; it re-pairs once."
-  Write-Host "If it doesn't appear: chrome://policy -> Reload policies, or restart Chrome."
+  Write-Host "chrome://extensions should show 'Installed by policy'; it re-pairs once."
+  Write-Host "If not: chrome://policy -> Reload policies, or fully quit + reopen Chrome."
   Read-Host "Press Enter to close"
 }
 function Install-Unpacked($payload) {

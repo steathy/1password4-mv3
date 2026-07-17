@@ -2,13 +2,11 @@
 build/key.pem
 build/*.pem
 
-# Build artifacts. dist/onepassword-mv3.crx and dist/extension.json ARE committed
-# (they make install.ps1 one-click on any machine); the update manifest is
-# generated per-machine at install time.
+# Build artifacts. dist/ is committed (crx + extension.json + updates.xml) so
+# force-install works from GitHub over https and installs are build-tool-free.
 build/staging/
 build/*.crx
 build/*.reg
-dist/updates.xml
 
 # OS / editor cruft
 Thumbs.db

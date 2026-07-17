@@ -20,7 +20,11 @@
 param(
   [string]$Chrome  = "",
   [string]$SrcDir  = "$PSScriptRoot\..\src",
-  [string]$DistDir = "$PSScriptRoot\..\dist"
+  [string]$DistDir = "$PSScriptRoot\..\dist",
+  # Where the crx will be served from (must match install.ps1). Change if you fork.
+  [string]$Owner   = "steathy",
+  [string]$Repo    = "1password4-mv3",
+  [string]$Branch  = "main"
 )
 $ErrorActionPreference = "Stop"
 
@@ -74,5 +78,17 @@ Write-Host "Packed:  $crxOut"
 $id = (& node (Join-Path $BuildDir "compute-id.js") $keyPem "--id-only").Trim()
 @{ id = $id; version = $version } | ConvertTo-Json | Set-Content -Path (Join-Path $DistDir "extension.json") -Encoding UTF8
 Write-Host "Ext ID:  $id  ->  dist\extension.json"
+
+# 4. Update manifest served over https from GitHub (Chrome force-installs from it).
+$crxUrl = "https://raw.githubusercontent.com/$Owner/$Repo/$Branch/dist/onepassword-mv3.crx"
+@"
+<?xml version='1.0' encoding='UTF-8'?>
+<gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
+  <app appid='$id'>
+    <updatecheck codebase='$crxUrl' version='$version' />
+  </app>
+</gupdate>
+"@ | Set-Content -Path (Join-Path $DistDir "updates.xml") -Encoding UTF8
+Write-Host "Wrote:   dist\updates.xml -> $crxUrl"
 Write-Host ""
-Write-Host "Now install with:  .\install.ps1   (or install.bat)"
+Write-Host "Commit dist\ and push, then install with:  .\install.ps1  (or install.bat)"
