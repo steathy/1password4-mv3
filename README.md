@@ -1,5 +1,11 @@
 # 1Password 4 extension — Manifest V3 port
 
+> **Unofficial community port — not affiliated with, authorized by, or endorsed by
+> 1Password / AgileBits.** "1Password" and "AgileBits" are trademarks of their owner.
+> This exists only to keep a discontinued product (1Password 4, with local vault
+> support) working in a current browser, using your own data. Provided as-is, no
+> warranty. See [`NOTICE`](NOTICE) for third-party code and [`LICENSE`](LICENSE).
+
 A minimal Manifest V3 port of the legacy **1Password 4 (v4.7.5.90)** browser
 extension — the one that pairs with the **1Password 4 desktop app**, the last
 generation supporting local / Dropbox vault sync. The original extension still
@@ -93,12 +99,16 @@ It downloads this repo, then shows a menu:
 > `irm … | iex` runs remote code — review [`install.ps1`](install.ps1) first if you like.
 > The same script works from a local clone too: double-click **`install.bat`**.
 
-> **Keep the installed files — don't delete the crx.** Force-install is an *ongoing*
-> Chrome policy that references the crx by path (staged to
-> `%LOCALAPPDATA%\1Password4-MV3\` for a one-command install, or your clone folder
-> for a local install). Chrome re-checks that path at startup and periodically, so
-> deleting or moving it can make the extension stop loading. To remove it, use
-> **Uninstall** (which clears the policy) rather than deleting files.
+> **Keep the installed files — don't delete or move them.** Both install types load
+> from the folder they're staged in (`%LOCALAPPDATA%\1Password4-MV3\` for a
+> one-command install, or your clone folder locally):
+> - *Load unpacked* reads the extension directly from `…\src` on **every** Chrome
+>   launch — move or delete it and the extension disappears.
+> - *Force install* is an ongoing policy that re-checks the crx path at startup, so
+>   the crx must stay too.
+>
+> To remove cleanly: for force-install use **Uninstall** (clears the policy); for
+> load-unpacked, remove it from `chrome://extensions` first, then delete the folder.
 
 No `allowed_origins` / native-messaging step is needed — on Windows the extension
 connects over `ws://127.0.0.1`, which authenticates by pairing secret, not by
