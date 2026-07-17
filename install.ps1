@@ -148,15 +148,23 @@ function Install-Unpacked($payload) {
   $src = Join-Path $payload 'src'
   if (-not (Test-Path $src)) { throw "Missing $src." }
   try { Set-Clipboard -Value $src } catch {}
-  Write-Host ""
-  Write-Host "Load-unpacked setup" -ForegroundColor Green
-  Write-Host "  Files staged at: $src   (path copied to clipboard)"
-  Write-Host "  1) Chrome -> chrome://extensions"
-  Write-Host "  2) Turn on 'Developer mode' (top-right)"
-  Write-Host "  3) Click 'Load unpacked' and pick that folder (Ctrl+V pastes the path)"
-  Write-Host "  Keep the folder where it is - Chrome loads it from there each launch."
+  # Make sure a Chrome window exists to work in, but DON'T pass chrome://extensions
+  # on the command line - Chrome blocks navigating to privileged pages that way and
+  # just opens a blank window. The user types the URL instead.
   $exe = Find-Chrome
-  if ($exe) { Start-Process $exe "chrome://extensions" }
+  if ($exe -and -not (Get-Process chrome -ErrorAction SilentlyContinue)) { Start-Process $exe }
+  Write-Host ""
+  Write-Host "Load-unpacked setup - do these in Chrome:" -ForegroundColor Green
+  Write-Host ""
+  Write-Host "  1) Click the address bar, type  chrome://extensions  and press Enter."
+  Write-Host "     (Chrome won't let a script open that page for you, so type it yourself.)"
+  Write-Host "  2) Turn ON 'Developer mode' (top-right toggle). One-time - it stays on."
+  Write-Host "  3) Click 'Load unpacked'. In the folder picker press Ctrl+V (the path is"
+  Write-Host "     already on your clipboard), then Enter."
+  Write-Host ""
+  Write-Host "  Extension folder (also on clipboard):"
+  Write-Host "    $src" -ForegroundColor Cyan
+  Write-Host "  Keep that folder where it is - Chrome loads it from there each launch."
   Read-Host "Press Enter to close"
 }
 function Uninstall-Force($payload) {

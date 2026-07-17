@@ -5,6 +5,16 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). (The version here is the *port's*
 release version; the bundled extension keeps its own `4.7.5.90` manifest version.)
 
+## [1.0.3] - 2026-07-17
+
+### Fixed
+- **Load-unpacked no longer opens a blank Chrome window.** The installer used to run
+  `chrome.exe chrome://extensions`, but Chrome blocks navigating to privileged
+  `chrome://` pages from the command line, so it just opened an empty window. The
+  installer now prints clear steps (type `chrome://extensions` yourself, enable
+  Developer mode, Load unpacked, Ctrl+V the clipboard path) and only opens a plain
+  Chrome window if none is running.
+
 ## [1.0.2] - 2026-07-17
 
 ### Changed
@@ -74,6 +84,7 @@ on 1Password 4.6.1.618 (Windows 10).
   native-messaging host on Windows, so the native-messaging attempt always falls
   back — cosmetic, no performance impact.
 
+[1.0.3]: https://github.com/steathy/1password4-mv3/releases/tag/v1.0.3
 [1.0.2]: https://github.com/steathy/1password4-mv3/releases/tag/v1.0.2
 [1.0.1]: https://github.com/steathy/1password4-mv3/releases/tag/v1.0.1
 [1.0.0]: https://github.com/steathy/1password4-mv3/releases/tag/v1.0.0

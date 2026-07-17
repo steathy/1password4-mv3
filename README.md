@@ -88,10 +88,12 @@ It downloads this repo, then shows a menu:
 ```
 
 - **Load unpacked** (recommended) stages the files under
-  `%LOCALAPPDATA%\1Password4-MV3\src`, opens `chrome://extensions`, and copies the
-  path to your clipboard; you flip on **Developer mode** and click **Load unpacked**.
-  No admin, works on any machine. The only downside is Chrome's "Disable
-  developer-mode extensions" bubble at startup, which you dismiss.
+  `%LOCALAPPDATA%\1Password4-MV3\src` and copies that path to your clipboard, then
+  prints the steps: in Chrome, type `chrome://extensions` in the address bar, flip
+  on **Developer mode** (one-time), click **Load unpacked**, and `Ctrl+V` the path.
+  (Chrome blocks scripts from opening `chrome://` pages or adding unpacked
+  extensions, so those clicks are yours.) No admin, works on any machine. The only
+  ongoing cost is Chrome's dismissable "Disable developer-mode extensions" bubble.
 - **Force install** writes an `ExtensionInstallForcelist` policy pointing Chrome at
   the signed crx hosted on GitHub over https — no dev-mode nag, can't be disabled.
   **But it only works on enterprise-managed devices.** On a normal personal PC,
