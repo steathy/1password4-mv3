@@ -88,7 +88,7 @@ function Set-VerifyCodeSignatureOff {
   }
   if ((Get-ItemProperty $key -ErrorAction SilentlyContinue).VerifyCodeSignature -eq 0) { return $false }
   Set-ItemProperty -Path $key -Name 'VerifyCodeSignature' -Value 0 -Type DWord
-  Write-Host "Set VerifyCodeSignature=0 so 1Password 4 accepts Chrome (Google LLC signer)." -ForegroundColor Green
+  Write-Host "Set VerifyCodeSignature=0 so 1Password 4 accepts Chrome (now signed 'Google LLC') and other browsers not in its signer allow-list." -ForegroundColor Green
   return $true
 }
 function Restart-Agent {
@@ -180,17 +180,19 @@ function Install-Unpacked($payload) {
   $exe = Find-Chrome
   if ($exe -and -not (Get-Process chrome -ErrorAction SilentlyContinue)) { Start-Process $exe }
   Write-Host ""
-  Write-Host "Load-unpacked setup - do these in Chrome:" -ForegroundColor Green
+  Write-Host "Load-unpacked setup - do these in your browser (Chrome, Edge, or any" -ForegroundColor Green
+  Write-Host "Chromium browser with MV3 support):" -ForegroundColor Green
   Write-Host ""
-  Write-Host "  1) Click the address bar, type  chrome://extensions  and press Enter."
-  Write-Host "     (Chrome won't let a script open that page for you, so type it yourself.)"
+  Write-Host "  1) In the address bar, type the extensions page and press Enter:"
+  Write-Host "       Chrome: chrome://extensions     Edge: edge://extensions"
+  Write-Host "     (the browser won't let a script open that page for you, so type it yourself.)"
   Write-Host "  2) Turn ON 'Developer mode' (top-right toggle). One-time - it stays on."
   Write-Host "  3) Click 'Load unpacked'. In the folder picker press Ctrl+V (the path is"
   Write-Host "     already on your clipboard), then Enter."
   Write-Host ""
   Write-Host "  Extension folder (also on clipboard):"
   Write-Host "    $src" -ForegroundColor Cyan
-  Write-Host "  Keep that folder where it is - Chrome loads it from there each launch."
+  Write-Host "  Keep that folder where it is - your browser loads it from there each launch."
   Read-Host "Press Enter to close"
 }
 function Uninstall-Force($payload) {

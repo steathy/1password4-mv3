@@ -10,7 +10,8 @@
   the connection. The check is controlled by the registry DWORD
   HKCU\Software\AgileBits\1Password 4\VerifyCodeSignature  (0 = skip the check).
   Machines that set up a browser years ago have it = 0 already; a fresh machine
-  lacks it and defaults to "verify", which blocks Chrome.
+  lacks it and defaults to "verify", which blocks Chrome (and any other browser
+  whose signer name is not on the list). Setting it to 0 accepts every browser.
 
   This sets VerifyCodeSignature = 0 and restarts 1Password + its agent so the new
   value takes effect. No admin needed (HKCU only). ASCII-only for PowerShell 5.1.
@@ -43,8 +44,9 @@ Start-Sleep -Seconds 2
 Write-Host ""
 Write-Host "Done. Now:" -ForegroundColor Cyan
 Write-Host "  1) Start 1Password 4 and UNLOCK it (it relaunches the agent)."
-Write-Host "  2) In Chrome, reload the extension and watch the service worker console"
-Write-Host "     for '[CHROME]: Established connection to 1Password'."
+Write-Host "  2) In your browser (Chrome, Edge, or another Chromium browser), reload the"
+Write-Host "     extension and watch the service worker console for"
+Write-Host "     '[CHROME]: Established connection to 1Password'."
 Write-Host ""
 Write-Host "----- to undo later -----" -ForegroundColor DarkGray
 Write-Host "Remove-ItemProperty -Path '$key' -Name VerifyCodeSignature" -ForegroundColor DarkGray
