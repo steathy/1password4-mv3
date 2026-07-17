@@ -113,6 +113,57 @@ if (chrome.action && !chrome.browserAction) {
   });
 })();
 
+/* 5. Quiet benign runtime errors from the engine ---------------------------- */
+// Two harmless console errors the engine produces; neither affects fill/save.
+//   * chrome.windows.get(id, {windowTypes:['normal']}, cb) fails whenever a
+//     NON-normal window gains focus (the DevTools window, the popup, etc.), so the
+//     callback receives `undefined` and the engine's `win.focused` read throws
+//     ("Cannot read properties of undefined (reading 'focused')" / "No window with
+//     id"). Hand it a benign stub so the read is a harmless no-op.
+//   * chrome.tabs.sendMessage to a tab with no content script (chrome:// pages,
+//     ad-excluded frames) logs "Could not establish connection. Receiving end does
+//     not exist." because the engine's callback never reads lastError. Consume it.
+(function quietBenignErrors() {
+  const w = chrome.windows;
+  if (w && typeof w.get === 'function') {
+    const origGet = w.get.bind(w);
+    w.get = function (id, queryOrCb, cb) {
+      let query, callback;
+      if (typeof queryOrCb === 'function') callback = queryOrCb;
+      else { query = queryOrCb; callback = cb; }
+      if (typeof callback !== 'function') {
+        return query === undefined ? origGet(id) : origGet(id, query);
+      }
+      const wrapped = function (win) {
+        if (chrome.runtime.lastError || win == null) {
+          void chrome.runtime.lastError; // consume
+          win = { id: id, focused: false, type: 'normal', tabs: [] };
+        }
+        callback(win);
+      };
+      return query === undefined ? origGet(id, wrapped) : origGet(id, query, wrapped);
+    };
+  }
+
+  const t = chrome.tabs;
+  if (t && typeof t.sendMessage === 'function') {
+    const origSend = t.sendMessage.bind(t);
+    t.sendMessage = function (...args) {
+      const last = args[args.length - 1];
+      if (typeof last === 'function') {
+        args[args.length - 1] = function () {
+          void chrome.runtime.lastError; // consume "receiving end does not exist"
+          return last.apply(this, arguments);
+        };
+        return origSend.apply(null, args);
+      }
+      return origSend.apply(null, args.concat(function () {
+        void chrome.runtime.lastError;
+      }));
+    };
+  }
+})();
+
 /* Load the original engine (unmodified). ------------------------------------ */
 try {
   importScripts('ext/sjcl.js', 'global.min.js');
