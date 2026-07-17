@@ -16,5 +16,29 @@
       "urlFilter": "onepasswdfill=",
       "resourceTypes": ["main_frame"]
     }
+  },
+  {
+    "id": 2,
+    "priority": 1,
+    "action": {
+      "type": "redirect",
+      "redirect": { "extensionPath": "/paired.html" }
+    },
+    "condition": {
+      "urlFilter": "||agilebits.com/browsers/welcome.html",
+      "resourceTypes": ["main_frame"]
+    }
+  },
+  {
+    "id": 3,
+    "priority": 1,
+    "action": {
+      "type": "redirect",
+      "redirect": { "extensionPath": "/paired.html" }
+    },
+    "condition": {
+      "urlFilter": "||agilebits.com/browsers/auth.html",
+      "resourceTypes": ["main_frame"]
+    }
   }
 ]

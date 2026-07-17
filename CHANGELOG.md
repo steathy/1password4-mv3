@@ -5,6 +5,34 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). (The version here is the *port's*
 release version; the bundled extension keeps its own `4.7.5.90` manifest version.)
 
+## [1.1.0] - 2026-07-17
+
+### Fixed
+- **First-run machines: the extension connected but never registered.** On a PC
+  that had never paired a browser before, the service worker reached `connected to
+  port 6263` and then went silent — no pairing, no error. Reverse-engineering
+  `Agile1pAgent.exe` found the cause: the desktop agent verifies the connecting
+  browser's **Authenticode signer name** against a hardcoded allow-list (`Google
+  Inc`, `Microsoft Corporation`, `Vivaldi Technologies AS`). Google's code-signing
+  identity became **`Google LLC`** around 2018, so modern Chrome fails the check and
+  the agent drops the connection silently. It's gated by the registry DWORD
+  `HKCU\Software\AgileBits\1Password 4\VerifyCodeSignature` (0 = skip). Machines set
+  up years ago already have it `= 0`; a fresh one defaults to "verify". This is also
+  the true reason the legacy extension kept working in Edge/Vivaldi but not Chrome.
+
+### Added
+- **Installer applies the fix automatically.** `install.ps1`'s Load-unpacked path now
+  sets `VerifyCodeSignature=0` and restarts the agent so it takes effect. A standalone
+  [`seed-op4.ps1`](seed-op4.ps1) does the same for existing installs (no admin).
+- **Retired-page redirect.** After pairing, the engine opens the dead
+  `agilebits.com/browsers/welcome.html`; a new `declarativeNetRequest` rule redirects
+  it (and the dead `auth.html`) to a bundled `src/paired.html` "Connected" page, so
+  first-run no longer shows a DNS-error tab.
+
+### Changed
+- `seed-op4.ps1` no longer seeds `OPX4.auth` (that turned out to be a red herring —
+  `VerifyCodeSignature` is the actual fix).
+
 ## [1.0.3] - 2026-07-17
 
 ### Fixed
@@ -84,6 +112,7 @@ on 1Password 4.6.1.618 (Windows 10).
   native-messaging host on Windows, so the native-messaging attempt always falls
   back — cosmetic, no performance impact.
 
+[1.1.0]: https://github.com/steathy/1password4-mv3/releases/tag/v1.1.0
 [1.0.3]: https://github.com/steathy/1password4-mv3/releases/tag/v1.0.3
 [1.0.2]: https://github.com/steathy/1password4-mv3/releases/tag/v1.0.2
 [1.0.1]: https://github.com/steathy/1password4-mv3/releases/tag/v1.0.1

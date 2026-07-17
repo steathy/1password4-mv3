@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>1Password connected</title>
+<style>
+  :root { color-scheme: light dark; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex; align-items: center; justify-content: center;
+    font: 15px/1.5 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #f4f5f7; color: #1d2733;
+  }
+  .card {
+    max-width: 460px; margin: 24px; padding: 32px 36px; text-align: center;
+    background: #fff; border-radius: 14px; box-shadow: 0 6px 30px rgba(0,0,0,.08);
+  }
+  .mark {
+    width: 56px; height: 56px; margin: 0 auto 18px; border-radius: 12px;
+    background: #0364d3; color: #fff; display: flex; align-items: center; justify-content: center;
+    font-size: 28px; font-weight: 700;
+  }
+  h1 { font-size: 20px; margin: 0 0 8px; }
+  p { margin: 0 0 6px; color: #4a5568; }
+  .small { font-size: 13px; color: #8a94a6; margin-top: 16px; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #12161c; color: #e6eaf0; }
+    .card { background: #1b212b; box-shadow: 0 6px 30px rgba(0,0,0,.4); }
+    p { color: #aeb7c6; } .small { color: #6b7686; }
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="mark">1P</div>
+    <h1>Connected to 1Password</h1>
+    <p>Your browser is now paired with the 1Password desktop app.</p>
+    <p>You can close this tab and use the toolbar button to fill and save logins.</p>
+    <p class="small">Shown by the unofficial 1Password&nbsp;4 MV3 port, replacing the
+      retired <code>agilebits.com</code> welcome page.</p>
+  </div>
+</body>
+</html>

@@ -52,6 +52,11 @@ strips the `code` from the incoming `authNew` message, which makes the engine
 self-complete the pairing with no page. See [`docs/design.md`](docs/design.md)
 (Component 7) for the full trace.
 
+After a successful pair the engine also opens `agilebits.com/browsers/welcome.html`
+— another retired page. A `declarativeNetRequest` rule redirects both that and the
+dead `auth.html` to a small bundled page ([`src/paired.html`](src/paired.html)), so
+you get a tidy "Connected" tab instead of a DNS error.
+
 ## Quick start (development — no packaging)
 
 This is the fastest way to test. Because `src/manifest.json` keeps 1Password's
@@ -110,6 +115,41 @@ It downloads this repo, then shows a menu:
 > **every** Chrome launch — move or delete it and the extension disappears. To
 > remove it, use `chrome://extensions` → Remove, then delete the folder.
 
+## First-run machines: the browser code-signature check
+
+If the extension loads and the service-worker console reaches `connected to port
+6263` but **never** shows `Established connection to 1Password` — no pairing, no
+error, just silence — the desktop app is refusing the connection. This bites
+machines that have **never paired a browser before**.
+
+Cause (found by reverse-engineering `Agile1pAgent.exe`): the 1Password 4 desktop
+agent verifies the connecting browser's **Authenticode signer name** against a
+hardcoded allow-list — `Google Inc`, `Microsoft Corporation`, `Vivaldi
+Technologies AS`. Google renamed its code-signing certificate to **`Google LLC`**
+around 2018, so modern Chrome no longer matches and the agent drops the connection
+without a word. (It's also the real reason the legacy extension kept working in
+Edge/Vivaldi but not Chrome — their signer names never changed.) The check is
+controlled by a registry value:
+
+```
+HKCU\Software\AgileBits\1Password 4\VerifyCodeSignature   (DWORD)   0 = skip the check
+```
+
+Machines that set up a browser years ago already have it `= 0`; a fresh machine
+lacks the value and defaults to "verify". **The one-command installer's Load
+unpacked option sets this for you.** To apply it by hand, run
+[`seed-op4.ps1`](seed-op4.ps1) (no admin), or:
+
+```powershell
+Set-ItemProperty -Path 'HKCU:\Software\AgileBits\1Password 4' -Name 'VerifyCodeSignature' -Value 0 -Type DWord
+Stop-Process -Name 1Password,Agile1pAgent -Force   # the agent re-reads it only on restart
+```
+
+Then reopen and unlock 1Password 4 (it relaunches the agent) and reload the
+extension. Note the agent is a **separate, long-lived process** — quitting
+1Password alone does not restart it, so the setting won't take effect until you
+kill the agent too.
+
 ### Force install on a personal PC
 
 Chrome only honors off-Web-Store force-install on **enterprise-managed** devices
@@ -141,7 +181,8 @@ commit those and the one-command install picks them up.
 src/                    the loadable / packable MV3 extension
   manifest.json         MV3 manifest (keeps original key for dev)
   sw-bootstrap.js       the only hand-written logic (shims + import)
-  rules/                declarativeNetRequest rule for the deep link
+  rules/                declarativeNetRequest rules (deep link + dead-page redirect)
+  paired.html           "Connected" page shown in place of the retired welcome page
   global.min.js         1Password engine, unmodified
   injected.min.js       content script, unmodified
   ext/sjcl.js           crypto library, unmodified
@@ -151,6 +192,7 @@ build/                  pack.ps1 + compute-id.js (rebuild the crx; key.pem gitig
 dist/                   committed install artifacts: signed crx + extension.json
 original/               the unmodified original MV2 extension (.crx)
 install.ps1 / .bat      one-command / one-click installer (menu; self-elevating)
+seed-op4.ps1            first-run fix: set VerifyCodeSignature=0 (accept modern Chrome)
 uninstall.ps1           remove the force-install policy
 docs/                   design spec
 LICENSE / NOTICE        MIT (original work) + third-party notices
@@ -185,7 +227,7 @@ concurrently with the existing Edge/Vivaldi installs.
 
 ## Changelog
 
-See [`CHANGELOG.md`](CHANGELOG.md). Current release: **1.0.0**.
+See [`CHANGELOG.md`](CHANGELOG.md). Current release: **1.1.0**.
 
 ## License
 

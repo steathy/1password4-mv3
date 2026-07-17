@@ -74,6 +74,30 @@ function Restart-Chrome {
     Write-Host "Start Chrome to activate."
   }
 }
+function Set-VerifyCodeSignatureOff {
+  # 1Password 4's agent verifies the connecting browser's Authenticode signer name
+  # against a hardcoded list ("Google Inc", "Microsoft Corporation", "Vivaldi
+  # Technologies AS"). Modern Chrome signs as "Google LLC", so with the check on the
+  # agent silently drops Chrome (extension connects but never registers). This DWORD
+  # (0 = skip) is what working machines already have; a fresh machine lacks it and
+  # defaults to verify. HKCU, no admin. Returns $true if it actually changed.
+  $key = 'HKCU:\Software\AgileBits\1Password 4'
+  if (-not (Test-Path $key)) {
+    Write-Host "Note: 1Password 4 settings key not found - skipping VerifyCodeSignature (is the app installed?)." -ForegroundColor Yellow
+    return $false
+  }
+  if ((Get-ItemProperty $key -ErrorAction SilentlyContinue).VerifyCodeSignature -eq 0) { return $false }
+  Set-ItemProperty -Path $key -Name 'VerifyCodeSignature' -Value 0 -Type DWord
+  Write-Host "Set VerifyCodeSignature=0 so 1Password 4 accepts Chrome (Google LLC signer)." -ForegroundColor Green
+  return $true
+}
+function Restart-Agent {
+  # Agile1pAgent.exe reads VerifyCodeSignature at startup and is a separate,
+  # long-lived process; quitting 1Password alone does not restart it.
+  Stop-Process -Name '1Password','Agile1pAgent' -Force -ErrorAction SilentlyContinue
+  Start-Sleep -Seconds 2
+  Write-Host "Restarted 1Password + agent - reopen 1Password 4 and UNLOCK it." -ForegroundColor Cyan
+}
 function Test-Payload($root) {
   $root -and (Test-Path (Join-Path $root 'dist\onepassword-mv3.crx')) `
         -and (Test-Path (Join-Path $root 'dist\extension.json'))
@@ -147,6 +171,8 @@ function Install-Force($payload) {
 function Install-Unpacked($payload) {
   $src = Join-Path $payload 'src'
   if (-not (Test-Path $src)) { throw "Missing $src." }
+  # First-run fix: let 1Password 4 accept modern Chrome (see Set-VerifyCodeSignatureOff).
+  if (Set-VerifyCodeSignatureOff) { Restart-Agent }
   try { Set-Clipboard -Value $src } catch {}
   # Make sure a Chrome window exists to work in, but DON'T pass chrome://extensions
   # on the command line - Chrome blocks navigating to privileged pages that way and
