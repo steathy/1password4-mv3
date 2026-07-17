@@ -105,7 +105,16 @@ build/                  packaging + install tooling (artifacts gitignored)
 docs/                   design spec
 ```
 
-## Status & known risks
+## Status
+
+**Working.** Loaded unpacked in current Chrome against 1Password 4.6.1 on Windows:
+the service worker connects, first-run pairing self-completes (no dead page), and
+fill/save work. Chrome pairs under its own `extId`, so it runs concurrently with the
+existing Edge/Vivaldi installs.
+
+Remaining: the no-dev-nag ship install (`build/pack.ps1` → `.crx` + registry).
+
+## Known risks
 
 - **Service-worker lifetime.** The engine keeps the session and derived keys in
   memory. A keep-alive holds the worker up while it runs; if Chrome terminates it
