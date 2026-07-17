@@ -17,8 +17,9 @@ if (!keyPath) {
   process.exit(1);
 }
 
+const privateKey = crypto.createPrivateKey(fs.readFileSync(keyPath, 'utf8'));
 const spkiDer = crypto
-  .createPrivateKey(fs.readFileSync(keyPath, 'utf8'))
+  .createPublicKey(privateKey)
   .export({ type: 'spki', format: 'der' });
 
 const digest = crypto.createHash('sha256').update(spkiDer).digest();

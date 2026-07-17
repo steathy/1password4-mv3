@@ -60,34 +60,40 @@ messaging should work with no further setup.
 If native messaging does not connect, the `ws://127.0.0.1` fallback should still
 engage automatically; watch the console for `[AGENT:WS]` lines.
 
-## Install for real (packed .crx, no developer-mode nag)
+## Install for real (force-install, no developer-mode nag)
 
-Once it works in dev, package it and install via the Windows registry so Chrome
-stops nagging and can't silently disable it.
+Once it works in dev, package it and install it as a Chrome **force-installed**
+extension so Chrome stops nagging and can't silently disable it. (A plain
+external-extension local-crx install would get disabled by Chrome's "Web Store
+only" rule; force-installed extensions are exempt.)
 
 ```powershell
 # from the repo root
 powershell -ExecutionPolicy Bypass -File .\build\pack.ps1
 ```
 
-This produces, in `build/`:
+This produces, in `build/` (all gitignored):
 
-- `onepassword-mv3.crx` — the signed package.
-- `key.pem` — the signing key (**keep it**; it fixes the extension ID). Gitignored.
-- `install.reg` — registry keys that install the `.crx` for all users.
-- `allowed_origins.snippet.txt` — the packed extension's ID to add to the native
-  host.
+- `onepassword-mv3.crx` — the signed package. **Leave it where it is**; the policy
+  points at this exact path.
+- `key.pem` — the signing key (**keep it**; it fixes the extension ID).
+- `updates.xml` — the Omaha update manifest the policy fetches the crx from.
+- `forcelist-install.reg` — the `ExtensionInstallForcelist` policy under **HKCU**
+  (no admin needed on a personal machine); `forcelist-install-hklm.reg` is the
+  HKLM equivalent if HKCU is ignored; `forcelist-uninstall.reg` removes it.
 
 Then:
 
-1. `reg import build\install.reg` (elevated) and restart Chrome.
-2. The packed build is signed with **your** key, so its ID differs from the
-   original. Add the `chrome-extension://<id>/` line from
-   `allowed_origins.snippet.txt` to the `allowed_origins` array of the native host
-   manifest (`2bua8c4s2c.com.agilebits.1password`). The host manifest's path is the
-   `(Default)` value under
-   `HKCU\Software\Google\Chrome\NativeMessagingHosts\2bua8c4s2c.com.agilebits.1password`
-   (or the `HKLM` equivalent).
+1. `reg import build\forcelist-install.reg`, then fully restart Chrome
+   (`chrome://restart`).
+2. 1Password appears on `chrome://extensions` as **"Installed by policy."** The
+   packed build is signed with **your** key, so its ID differs from the unpacked
+   one — it re-pairs itself once automatically (via the bootstrap's pairing
+   bypass). After it works, **remove the Load-unpacked copy** so you don't run two.
+
+No `allowed_origins` / native-messaging step is needed — on Windows the extension
+connects over `ws://127.0.0.1`, which authenticates by pairing secret, not by
+extension ID (see [`docs/design.md`](docs/design.md), Component 5).
 
 ## Layout
 
