@@ -22,11 +22,11 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 
-# ===== EDIT THESE to your published GitHub repo =====
-$Owner  = 'YOUR_GH_USER'
+# ===== Published GitHub repo (change if you fork) =====
+$Owner  = 'steathy'
 $Repo   = '1password4-mv3'
 $Branch = 'main'
-# ====================================================
+# ======================================================
 
 $InstallDir = Join-Path $env:LOCALAPPDATA '1Password4-MV3'
 

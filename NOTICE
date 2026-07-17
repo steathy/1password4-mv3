@@ -1,0 +1,31 @@
+THIRD-PARTY NOTICES
+===================
+
+This repository redistributes files that are NOT covered by its MIT license.
+They remain the property of their respective owners and are included only to
+keep a legally-purchased legacy product working. No affiliation with or
+endorsement by 1Password / AgileBits is claimed or implied.
+
+1) 1Password 4 browser extension (© AgileBits Inc. / 1Password)
+   - src/global.min.js
+   - src/injected.min.js
+   - src/fillStyle.css
+   - src/assets/*  (icons)
+   - original/1Password-4.7.5.90.crx   (the unmodified original MV2 extension)
+   - dist/onepassword-mv3.crx          (the above engine repackaged for MV3;
+                                        only manifest.json + sw-bootstrap.js are
+                                        original work, the rest is unchanged)
+   These are shipped verbatim from the freely-distributed 1Password extension.
+   All rights reserved by the owner. "1Password" and "AgileBits" are trademarks
+   of their owner. Redistributed here under the assumption of permissible reuse
+   of the freely-distributed browser extension; if the rights holder objects,
+   these files will be removed.
+
+2) Stanford Javascript Crypto Library (SJCL)
+   - src/ext/sjcl.js
+   © 2009-2015 Emily Stark, Mike Hamburg, Dan Boneh (Stanford University).
+   Licensed under BSD-2-Clause OR GPL-2.0. See https://github.com/bitwiseshiftleft/sjcl
+
+This is an unofficial, community-maintained compatibility port. Use at your own
+risk. It exists so owners of 1Password 4 (a discontinued product with local
+vault support) can keep using their own data in a current browser.

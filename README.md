@@ -1,14 +1,19 @@
 # 1Password 4 extension — Manifest V3 port
 
 A minimal Manifest V3 port of the legacy **1Password 4 (v4.7.5.90)** browser
-extension — the one that pairs with the **1Password 4.6.1.618** desktop app (the
-last desktop version supporting local / Dropbox vault sync). The original
-extension still works in Edge and Vivaldi but stopped loading in Chrome after the
-Manifest V2 sunset. This port makes it load and work in current Chrome again.
+extension — the one that pairs with the **1Password 4 desktop app**, the last
+generation supporting local / Dropbox vault sync. The original extension still
+works in Edge and Vivaldi but stopped loading in Chrome after the Manifest V2
+sunset. This port makes it load and work in current Chrome again.
 
 It talks to the **unmodified** desktop app over the same two transports the
 original used — native messaging (`2bua8c4s2c.com.agilebits.1password`) and a
-`ws://127.0.0.1` fallback — so no changes to 1Password 4.6.1 are required.
+`ws://127.0.0.1` fallback — so no changes to the desktop app are required.
+
+> **Compatibility:** designed to work with **any 1Password 4.x** desktop version,
+> since the extension↔app protocol is unchanged across the 4 series. **Tested on
+> 1Password 4.6.1.618** (Windows 10). Other 4.x builds should work but are
+> unverified — reports welcome.
 
 ## How it works
 
@@ -65,7 +70,7 @@ engage automatically; watch the console for `[AGENT:WS]` lines.
 Open **Windows PowerShell** and run:
 
 ```powershell
-irm https://raw.githubusercontent.com/YOUR_GH_USER/1password4-mv3/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/steathy/1password4-mv3/main/install.ps1 | iex
 ```
 
 It downloads this repo, then shows a menu:
@@ -88,6 +93,13 @@ It downloads this repo, then shows a menu:
 > `irm … | iex` runs remote code — review [`install.ps1`](install.ps1) first if you like.
 > The same script works from a local clone too: double-click **`install.bat`**.
 
+> **Keep the installed files — don't delete the crx.** Force-install is an *ongoing*
+> Chrome policy that references the crx by path (staged to
+> `%LOCALAPPDATA%\1Password4-MV3\` for a one-command install, or your clone folder
+> for a local install). Chrome re-checks that path at startup and periodically, so
+> deleting or moving it can make the extension stop loading. To remove it, use
+> **Uninstall** (which clears the policy) rather than deleting files.
+
 No `allowed_origins` / native-messaging step is needed — on Windows the extension
 connects over `ws://127.0.0.1`, which authenticates by pairing secret, not by
 extension ID (see [`docs/design.md`](docs/design.md), Component 5).
@@ -98,8 +110,8 @@ extension ID (see [`docs/design.md`](docs/design.md), Component 5).
 re-signs the crx and refreshes `dist/onepassword-mv3.crx` + `dist/extension.json`;
 commit those and the one-command install picks them up.
 
-> Publishing: set `$Owner` / `$Repo` / `$Branch` at the top of `install.ps1` to your
-> GitHub repo before pushing, and use your account in the `irm` URL above.
+> Forking: change `$Owner` / `$Repo` / `$Branch` at the top of `install.ps1` and the
+> `irm` URL above to point at your own repo.
 
 ## Layout
 
@@ -115,19 +127,28 @@ src/                    the loadable / packable MV3 extension
   assets/               icons
 build/                  pack.ps1 + compute-id.js (rebuild the crx; key.pem gitignored)
 dist/                   committed install artifacts: signed crx + extension.json
-install.ps1 / .bat      one-click force-install (self-elevating)
+original/               the unmodified original MV2 extension (.crx)
+install.ps1 / .bat      one-command / one-click installer (menu; self-elevating)
 uninstall.ps1           remove the force-install policy
 docs/                   design spec
+LICENSE / NOTICE        MIT (original work) + third-party notices
+CHANGELOG.md            release history
 ```
+
+## The original extension
+
+[`original/1Password-4.7.5.90.crx`](original/1Password-4.7.5.90.crx) is the
+**unmodified original** 1Password 4 (MV2) extension, kept for reference and for use
+in browsers that still accept Manifest V2 (e.g. current Vivaldi). The MV3 port in
+`src/` is that same extension with only `manifest.json` rewritten and
+`sw-bootstrap.js` added.
 
 ## Status
 
-**Working.** Loaded unpacked in current Chrome against 1Password 4.6.1 on Windows:
-the service worker connects, first-run pairing self-completes (no dead page), and
-fill/save work. Chrome pairs under its own `extId`, so it runs concurrently with the
-existing Edge/Vivaldi installs.
-
-Remaining: the no-dev-nag ship install (`build/pack.ps1` → `.crx` + registry).
+**Working.** Runs in current Chrome against 1Password 4 on Windows (tested
+4.6.1.618): the service worker connects, first-run pairing self-completes (no dead
+page), and fill/save work. Chrome pairs under its own extension ID, so it runs
+concurrently with the existing Edge/Vivaldi installs.
 
 ## Known risks
 
@@ -139,3 +160,19 @@ Remaining: the no-dev-nag ship install (`build/pack.ps1` → `.crx` + registry).
   is exempt from Private Network Access); confirm on your setup.
 - Not for the Chrome Web Store; not for 1Password 7/8 or account-based vaults.
   See [`docs/`](docs/) for the full design.
+
+## Changelog
+
+See [`CHANGELOG.md`](CHANGELOG.md). Current release: **1.0.0**.
+
+## License
+
+The original work in this repository — the MV3 port glue (`src/sw-bootstrap.js`, the
+MV3 `manifest.json`, DNR rules) and the install/build tooling — is licensed under the
+**[MIT License](LICENSE)**.
+
+The bundled 1Password extension files (`src/global.min.js`, `src/injected.min.js`,
+`src/assets/*`, the `.crx` files) are **© AgileBits Inc. / 1Password** and are *not*
+covered by the MIT license; `src/ext/sjcl.js` is the Stanford JS Crypto Library
+(BSD-2-Clause / GPL). See [`NOTICE`](NOTICE) for details. This is an unofficial,
+community port, not affiliated with or endorsed by 1Password.
