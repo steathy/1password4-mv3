@@ -77,6 +77,42 @@ if (chrome.action && !chrome.browserAction) {
   }
 })();
 
+/* 4. contextMenus.create({onclick}) → contextMenus.onClicked ----------------- */
+// MV3 dropped the `onclick` property on contextMenus.create. The engine creates
+// its "1Password" menu item with an inline onclick; capture that handler, strip
+// the property so create() succeeds, and dispatch it from a single onClicked
+// listener keyed by menu id.
+(function shimContextMenuOnclick() {
+  const cm = chrome.contextMenus;
+  if (!cm || typeof cm.create !== 'function') return;
+  const handlers = new Map();
+  let counter = 0;
+  const origCreate = cm.create.bind(cm);
+  cm.create = function (props, cb) {
+    if (props && typeof props.onclick === 'function') {
+      props = Object.assign({}, props);
+      const onclick = props.onclick;
+      delete props.onclick;
+      if (props.id === undefined || props.id === null) {
+        props.id = 'op-cm-' + ++counter;
+      }
+      handlers.set(props.id, onclick);
+      return origCreate(props, cb);
+    }
+    return origCreate(props, cb);
+  };
+  cm.onClicked.addListener(function (info, tab) {
+    const h = handlers.get(info.menuItemId);
+    if (h) {
+      try {
+        h(info, tab);
+      } catch (e) {
+        console.error('[1P-MV3] contextMenu handler error', e);
+      }
+    }
+  });
+})();
+
 /* Load the original engine (unmodified). ------------------------------------ */
 try {
   importScripts('ext/sjcl.js', 'global.min.js');

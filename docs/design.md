@@ -93,8 +93,20 @@ Runs before the imports:
    so that when `global.min.js` registers its blocking `*onepasswdfill=*` redirect,
    we intercept the registration and route it through Component 3 instead of the
    (absent) blocking engine.
+4. **contextMenus.onclick shim:** MV3 dropped the `onclick` property on
+   `contextMenus.create`; the engine uses it for its "1Password" menu item. We
+   wrap `create`, strip `onclick`, and dispatch it from a single
+   `contextMenus.onClicked` listener keyed by menu id. (Found during the API scan;
+   not in the original design.)
 
 Then `importScripts('ext/sjcl.js', 'global.min.js')`.
+
+*API-scan result:* every other API the engine touches survives into MV3 —
+`chrome.tabs` (create/query/update/sendMessage/onUpdated), `chrome.windows`,
+`chrome.storage.local`, `chrome.contextMenus.removeAll`, `chrome.runtime`
+(connectNative/getPlatformInfo/onMessage returning `true` for async). No
+`chrome.extension`, `chrome.notifications`, `tabs.executeScript`, `insertCSS`,
+`XMLHttpRequest`, `document`, or `localStorage`.
 
 ### Component 3 — "Open-and-fill" deep link on declarativeNetRequest
 
