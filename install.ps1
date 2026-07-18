@@ -39,7 +39,8 @@ $UpdateUrl  = "$RawBase/dist/updates.xml"
 # Run the interactive menu in its own console window (like Microsoft Activation
 # Scripts) for a clean, correctly-sized, colored UI even when launched via
 # `irm | iex`. Re-entry is guarded by OP4_WIN=1; the self-elevation path already
-# opens its own window and passes -Mode, so it does not double up here.
+# opens its own window and passes -Mode, so it does not double up here. No -NoExit:
+# the menu loops until the user picks [0] Quit, and then the window closes.
 if (-not $Mode -and $env:OP4_WIN -ne '1') {
   $reenter = if ($PSCommandPath) {
     "& '" + ($PSCommandPath -replace "'", "''") + "'"
@@ -47,10 +48,62 @@ if (-not $Mode -and $env:OP4_WIN -ne '1') {
     "irm '$RawBase/install.ps1' | iex"
   }
   Start-Process -FilePath 'powershell.exe' -ArgumentList @(
-    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-NoExit', '-Command',
+    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command',
     "`$env:OP4_WIN='1'; $reenter"
   ) | Out-Null
   return
+}
+
+# ---- centered block output -------------------------------------------------
+# Everything prints inside one fixed-width panel that is centered AS A WHOLE
+# (like `margin: 0 auto` on a div); content stays left-aligned WITHIN the panel,
+# so all lines share one left edge instead of each being centered on its own.
+$script:PanelW = 62
+function Get-Width  { try { $Host.UI.RawUI.WindowSize.Width } catch { 80 } }
+function Get-Margin { [Math]::Max(0, [int]( ((Get-Width) - $script:PanelW) / 2 )) }
+function Write-Mid {
+  param([string]$Text = '', [string]$Color)
+  $line = (' ' * (Get-Margin)) + $Text
+  if ($Color) { Write-Host $line -ForegroundColor $Color } else { Write-Host $line }
+}
+function Write-MidSeg {
+  # Colored segments (@(@{T='text';C='Color'},...)) printed at the panel margin.
+  param([object[]]$Segs)
+  Write-Host (' ' * (Get-Margin)) -NoNewline
+  foreach ($s in $Segs) {
+    if ($s.C) { Write-Host $s.T -ForegroundColor $s.C -NoNewline } else { Write-Host $s.T -NoNewline }
+  }
+  Write-Host ''
+}
+
+function Set-ConsoleFont {
+  # Bump the console font ~25% for readability. Best-effort: ignored if it fails
+  # (e.g. output redirected). Runs in our own window, so it affects nothing else.
+  try {
+    if (-not ('OP4.ConFont' -as [type])) {
+      Add-Type -Namespace OP4 -Name ConFont -MemberDefinition @'
+[StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)]
+public struct FONTINFO {
+  public uint cbSize; public uint nFont;
+  public short X; public short Y;
+  public uint Family; public uint Weight;
+  [MarshalAs(UnmanagedType.ByValTStr, SizeConst=32)] public string Face;
+}
+[DllImport("kernel32.dll", SetLastError=true)] public static extern IntPtr GetStdHandle(int n);
+[DllImport("kernel32.dll", SetLastError=true)] public static extern bool GetCurrentConsoleFontEx(IntPtr h, bool m, ref FONTINFO f);
+[DllImport("kernel32.dll", SetLastError=true)] public static extern bool SetCurrentConsoleFontEx(IntPtr h, bool m, ref FONTINFO f);
+'@
+    }
+    $h = [OP4.ConFont]::GetStdHandle(-11)   # STD_OUTPUT_HANDLE
+    $f = New-Object 'OP4.ConFont+FONTINFO'
+    $f.cbSize = [uint32][System.Runtime.InteropServices.Marshal]::SizeOf($f)
+    [void][OP4.ConFont]::GetCurrentConsoleFontEx($h, $false, [ref]$f)
+    $cur = [int]$f.Y; if ($cur -le 0) { $cur = 16 }
+    $f.Y = [short][math]::Max($cur + 2, [int][math]::Round($cur * 1.25))
+    $f.X = 0
+    if ([string]::IsNullOrEmpty($f.Face)) { $f.Face = 'Consolas' }
+    [void][OP4.ConFont]::SetCurrentConsoleFontEx($h, $false, [ref]$f)
+  } catch {}
 }
 
 function Test-Managed {
@@ -82,14 +135,14 @@ function Restart-Chrome {
   $exe = Find-Chrome
   $running = Get-Process chrome -ErrorAction SilentlyContinue
   if ($running) {
-    Write-Host "Closing Chrome to apply the policy..."
+    Write-Mid 'Closing Chrome to apply the policy...' 'Yellow'
     foreach ($p in $running) { try { $p.CloseMainWindow() | Out-Null } catch {} }
     Start-Sleep -Seconds 3
     $still = Get-Process chrome -ErrorAction SilentlyContinue
     if ($still) { try { $still | Stop-Process -Force -ErrorAction SilentlyContinue } catch {}; Start-Sleep -Seconds 1 }
-    if ($exe) { Start-Process $exe; Write-Host "Chrome relaunched." }
+    if ($exe) { Start-Process $exe; Write-Mid 'Chrome relaunched.' 'Green' }
   } else {
-    Write-Host "Start Chrome to activate."
+    Write-Mid 'Start Chrome to activate.' 'Gray'
   }
 }
 function Set-VerifyCodeSignatureOff {
@@ -120,10 +173,37 @@ function Test-Payload($root) {
   $root -and (Test-Path (Join-Path $root 'dist\onepassword-mv3.crx')) `
         -and (Test-Path (Join-Path $root 'dist\extension.json'))
 }
+function Get-RemoteSha {
+  # The branch head commit SHA is a cheap content fingerprint - a few bytes over
+  # the API instead of re-downloading the whole zip. `Accept: ...github.sha` makes
+  # the endpoint return the raw 40-char SHA as text. Returns $null if unreachable.
+  try {
+    $u = "https://api.github.com/repos/$Owner/$Repo/commits/$Branch"
+    $h = @{ 'User-Agent' = 'op4-mv3-installer'; 'Accept' = 'application/vnd.github.sha' }
+    return ([string](Invoke-RestMethod -UseBasicParsing -Uri $u -Headers $h -TimeoutSec 10)).Trim()
+  } catch { return $null }
+}
 function Get-Payload {
   if (Test-Payload $script:PayloadRoot) { return $script:PayloadRoot }
   if (Test-Payload $PSScriptRoot)       { return $PSScriptRoot }
-  # Remote run: download the repo zip and stage it.
+
+  # Remote run: reuse the previous download unless the branch head moved. The SHA
+  # of the last download is stored in $InstallDir\.commit and compared each run.
+  $shaFile   = Join-Path $InstallDir '.commit'
+  $remoteSha = Get-RemoteSha
+  if (Test-Payload $InstallDir) {
+    $localSha = if (Test-Path $shaFile) { (Get-Content $shaFile -Raw -ErrorAction SilentlyContinue).Trim() } else { '' }
+    if (-not $remoteSha) {
+      Write-Host "Can't reach GitHub - using the cached download." -ForegroundColor Yellow
+      return $InstallDir
+    }
+    if ($localSha -eq $remoteSha) {
+      Write-Host ("Cached download is current ({0}) - not re-downloading." -f $remoteSha.Substring(0, 7)) -ForegroundColor DarkGray
+      return $InstallDir
+    }
+    Write-Host ("Update available ({0}) - refreshing download..." -f $remoteSha.Substring(0, 7)) -ForegroundColor Yellow
+  }
+
   Write-Host "Downloading $Owner/$Repo ($Branch)..."
   $prev = $ProgressPreference; $ProgressPreference = 'SilentlyContinue'
   try {
@@ -141,12 +221,13 @@ function Get-Payload {
   if (-not (Test-Payload $InstallDir)) {
     throw "Downloaded payload has no dist\ - check `$Owner/`$Repo/`$Branch at the top of this script."
   }
+  if ($remoteSha) { Set-Content -Path (Join-Path $InstallDir '.commit') -Value $remoteSha -Encoding ASCII }
   return $InstallDir
 }
 function Invoke-Elevated($payload, $modeName) {
   $script = Join-Path $payload 'install.ps1'
   if (-not (Test-Path $script)) { throw "Cannot find $script to elevate." }
-  Write-Host "Requesting administrator rights..."
+  Write-Mid 'Requesting administrator rights...' 'Yellow'
   Start-Process powershell -Verb RunAs -ArgumentList `
     "-NoProfile -ExecutionPolicy Bypass -File `"$script`" -Mode $modeName -PayloadRoot `"$payload`""
 }
@@ -155,14 +236,15 @@ function Install-Force($payload) {
   $extId = (Get-Content (Join-Path $payload 'dist\extension.json') -Raw | ConvertFrom-Json).id
   if (-not (Test-Admin)) {
     if (-not (Test-Managed)) {
-      Write-Host ""
-      Write-Host "This PC is not enterprise-managed, so Chrome will BLOCK a force-install of" -ForegroundColor Yellow
-      Write-Host "any extension that isn't in the Chrome Web Store (chrome://policy shows it as" -ForegroundColor Yellow
-      Write-Host "[BLOCKED]). Load unpacked works on any PC and is the recommended option." -ForegroundColor Yellow
-      if ((Read-Host "Use Load unpacked instead? [Y/n]").Trim().ToLower() -ne 'n') {
+      Write-Host ''
+      Write-Mid 'This PC is not enterprise-managed, so Chrome will BLOCK a' 'Yellow'
+      Write-Mid 'force-install of any non-Web-Store extension (chrome://policy' 'Yellow'
+      Write-Mid 'shows it [BLOCKED]). Load unpacked works on any PC.' 'Yellow'
+      Write-Host ''
+      if ((Read-Host ((' ' * (Get-Margin)) + 'Use Load unpacked instead? [Y/n]')).Trim().ToLower() -ne 'n') {
         Install-Unpacked $payload; return
       }
-      Write-Host "Proceeding with force-install anyway (only works once the device is managed)."
+      Write-Mid 'Proceeding with force-install (works only on a managed device).' 'Gray'
     }
     Invoke-Elevated $payload 'force'; return
   }
@@ -180,42 +262,131 @@ function Install-Force($payload) {
   if (-not $target) { $target = [string]($max + 1) }
   Set-ItemProperty -Path $key -Name $target -Value "$extId;$UpdateUrl"
 
-  Write-Host "Force-install policy set: $extId -> $UpdateUrl" -ForegroundColor Green
+  Write-Host ''
+  Write-Mid 'Force-install policy set for extension:' 'Green'
+  Write-Mid ('  ' + $extId) 'Green'
   Restart-Chrome
-  Write-Host "chrome://extensions should show 'Installed by policy'; it re-pairs once."
-  Write-Host "If not: chrome://policy -> Reload policies, or fully quit + reopen Chrome."
-  Read-Host "Press Enter to finish"
+  Write-Host ''
+  Write-Mid "chrome://extensions should show 'Installed by policy'." 'Gray'
+  Write-Mid 'If not: chrome://policy -> Reload policies, then restart Chrome.' 'Gray'
 }
 function Install-Unpacked($payload) {
   $src = Join-Path $payload 'src'
   if (-not (Test-Path $src)) { throw "Missing $src." }
   # First-run fix: let 1Password 4 accept modern Chrome (see Set-VerifyCodeSignatureOff).
   if (Set-VerifyCodeSignatureOff) { Restart-Agent }
+
+  # Browser table: extensions URL to clipboard (step 1) + process/paths for the
+  # optional auto-restart (step 4).
+  $browsers = @(
+    @{ Key = '1'; Name = 'Chrome';  Url = 'chrome://extensions';  Proc = 'chrome';
+       Paths = @("$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
+                 "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
+                 "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe") }
+    @{ Key = '2'; Name = 'Edge';    Url = 'edge://extensions';    Proc = 'msedge';
+       Paths = @("$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe",
+                 "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe") }
+    @{ Key = '3'; Name = 'Vivaldi'; Url = 'vivaldi://extensions'; Proc = 'vivaldi';
+       Paths = @("$env:LOCALAPPDATA\Vivaldi\Application\vivaldi.exe",
+                 "$env:ProgramFiles\Vivaldi\Application\vivaldi.exe") }
+    @{ Key = '4'; Name = 'Opera';   Url = 'opera://extensions';   Proc = 'opera';
+       Paths = @("$env:LOCALAPPDATA\Programs\Opera\opera.exe") }
+    @{ Key = '5'; Name = 'Brave';   Url = 'brave://extensions';   Proc = 'brave';
+       Paths = @("$env:ProgramFiles\BraveSoftware\Brave-Browser\Application\brave.exe",
+                 "${env:ProgramFiles(x86)}\BraveSoftware\Brave-Browser\Application\brave.exe") }
+    @{ Key = '6'; Name = 'Other';   Url = '';                     Proc = ''; Paths = @() }
+  )
+
+  # ---- Step 1 of 5: pick a browser ----
+  Clear-Host
+  Write-Mid '=== Load unpacked  -  step 1 of 5 ===' 'Cyan'
+  Write-Host ''
+  Write-Mid 'Which browser are you installing into?' 'White'
+  Write-Host ''
+  foreach ($b in $browsers) { Write-MidSeg @( @{T = "[$($b.Key)] "; C = 'Green' }, @{T = $b.Name; C = 'White' } ) }
+  Write-Host ''
+  $sel = (Read-Host ((' ' * (Get-Margin)) + 'Choose your browser')).Trim()
+  $browser = $browsers | Where-Object { $_.Key -eq $sel } | Select-Object -First 1
+  if (-not $browser) { $browser = $browsers[-1] }   # anything else -> Other
+
+  # ---- Step 2 of 5: open the extensions page (URL to clipboard) ----
+  Clear-Host
+  Write-Mid '=== Load unpacked  -  step 2 of 5 ===' 'Cyan'
+  Write-Host ''
+  Write-Mid ('Open the extensions page in ' + $browser.Name) 'White'
+  Write-Host ''
+  if ($browser.Url) {
+    try { Set-Clipboard -Value $browser.Url } catch {}
+    Write-Mid ('Copied to clipboard:   ' + $browser.Url) 'Green'
+    Write-Host ''
+    Write-Mid 'Click the address bar, press Ctrl+V, then Enter.' 'Gray'
+  } else {
+    Write-Mid 'Go to your browser extensions page' 'Gray'
+    Write-Mid '(Chromium browsers: usually  <name>://extensions ).' 'Gray'
+  }
+  Write-Host ''
+  Read-Host ((' ' * (Get-Margin)) + 'Press Enter (or y) when the page is open') | Out-Null
+
+  # ---- Step 3 of 5: developer mode ----
+  Clear-Host
+  Write-Mid '=== Load unpacked  -  step 3 of 5 ===' 'Cyan'
+  Write-Host ''
+  Write-Mid 'Turn ON "Developer mode"' 'White'
+  Write-Host ''
+  Write-Mid 'It is the toggle in the top-right of the page.' 'Gray'
+  Write-Mid 'One-time - it stays on.' 'Gray'
+  Write-Host ''
+  Read-Host ((' ' * (Get-Margin)) + 'Press Enter (or y) when Developer mode is on') | Out-Null
+
+  # ---- Step 4 of 5: Load unpacked, paste the folder ----
   try { Set-Clipboard -Value $src } catch {}
-  # Make sure a Chrome window exists to work in, but DON'T pass chrome://extensions
-  # on the command line - Chrome blocks navigating to privileged pages that way and
-  # just opens a blank window. The user types the URL instead.
-  $exe = Find-Chrome
-  if ($exe -and -not (Get-Process chrome -ErrorAction SilentlyContinue)) { Start-Process $exe }
-  Write-Host ""
-  Write-Host "Load-unpacked setup - do these in your browser (Chrome, Edge, or any" -ForegroundColor Green
-  Write-Host "Chromium browser with MV3 support):" -ForegroundColor Green
-  Write-Host ""
-  Write-Host "  1) In the address bar, type the extensions page and press Enter:"
-  Write-Host "       Chrome: chrome://extensions     Edge: edge://extensions"
-  Write-Host "     (the browser won't let a script open that page for you, so type it yourself.)"
-  Write-Host "  2) Turn ON 'Developer mode' (top-right toggle). One-time - it stays on."
-  Write-Host "  3) Click 'Load unpacked'. In the folder picker press Ctrl+V (the path is"
-  Write-Host "     already on your clipboard), then Enter."
-  Write-Host "  4) " -NoNewline; Write-Host "Fully quit and reopen your browser" -ForegroundColor Yellow -NoNewline
-  Write-Host " to finish first-time pairing."
-  Write-Host "     A plain 'Reload' on the extensions page is NOT enough - close every" -ForegroundColor Yellow
-  Write-Host "     window of the browser, then start it again. You only do this once." -ForegroundColor Yellow
-  Write-Host ""
-  Write-Host "  Extension folder (also on clipboard):"
-  Write-Host "    $src" -ForegroundColor Cyan
-  Write-Host "  Keep that folder where it is - your browser loads it from there each launch."
-  Read-Host "Press Enter to finish"
+  Clear-Host
+  Write-Mid '=== Load unpacked  -  step 4 of 5 ===' 'Cyan'
+  Write-Host ''
+  Write-Mid 'Click "Load unpacked", then paste the folder' 'White'
+  Write-Host ''
+  Write-Mid ('Copied to clipboard:   ' + $src) 'Green'
+  Write-Host ''
+  Write-Mid 'In the folder picker, press Ctrl+V then Enter.' 'Gray'
+  Write-Mid 'Keep that folder in place - the browser reloads it each launch.' 'Gray'
+  Write-Host ''
+  Read-Host ((' ' * (Get-Margin)) + 'Press Enter (or y) when the extension has loaded') | Out-Null
+
+  # ---- Step 5 of 5: restart the browser (auto or manual) ----
+  Clear-Host
+  Write-Mid '=== Load unpacked  -  step 5 of 5 ===' 'Cyan'
+  Write-Host ''
+  Write-Mid 'Restart your browser to finish first-time pairing' 'White'
+  Write-Host ''
+  Write-Mid 'A plain "Reload" is NOT enough - restart the whole browser once.' 'Gray'
+  Write-Host ''
+  $canKill = $browser.Proc -and (Get-Process -Name $browser.Proc -ErrorAction SilentlyContinue)
+  if ($canKill) {
+    Write-MidSeg @( @{T = '[Y] '; C = 'Green' },  @{T = ('Close and reopen ' + $browser.Name + ' for me now'); C = 'White' } )
+    Write-MidSeg @( @{T = '[N] '; C = 'Yellow' }, @{T = 'I will restart it myself'; C = 'White' } )
+    Write-Host ''
+    $ans = (Read-Host ((' ' * (Get-Margin)) + 'Choose')).Trim().ToLower()
+    if ($ans -eq '' -or $ans -eq 'y') {
+      Write-Host ''
+      Write-Mid ('Closing ' + $browser.Name + '...') 'Yellow'
+      foreach ($p in (Get-Process -Name $browser.Proc -ErrorAction SilentlyContinue)) { try { $p.CloseMainWindow() | Out-Null } catch {} }
+      Start-Sleep -Seconds 3
+      $still = Get-Process -Name $browser.Proc -ErrorAction SilentlyContinue
+      if ($still) { try { $still | Stop-Process -Force -ErrorAction SilentlyContinue } catch {}; Start-Sleep -Seconds 1 }
+      $exe = $browser.Paths | Where-Object { Test-Path $_ } | Select-Object -First 1
+      if ($exe) { Start-Process $exe; Write-Mid ($browser.Name + ' reopened.') 'Green' }
+      else { Write-Mid ('Now open ' + $browser.Name + ' again.') 'Gray' }
+    } else {
+      Write-Host ''
+      Write-Mid ('Fully quit ' + $browser.Name + ' (close every window), then open it again.') 'Gray'
+    }
+  } else {
+    Write-Mid 'Fully quit your browser (close every window), then open it again.' 'Gray'
+  }
+
+  Write-Host ''
+  Write-Mid 'Done! Open the toolbar button; on a saved site it should fill.' 'Cyan'
+  Write-Mid "If it doesn't fill yet, unlock 1Password 4 and restart the browser." 'Gray'
 }
 function Uninstall-Force($payload) {
   if (-not (Test-Admin)) { Invoke-Elevated $payload 'uninstall'; return }
@@ -226,52 +397,87 @@ function Uninstall-Force($payload) {
     foreach ($n in $item.GetValueNames()) {
       if ($n -eq '') { continue }
       if (([string]$item.GetValue($n)) -like "$extId;*") {
-        Remove-ItemProperty -Path $key -Name $n; Write-Host "Removed forcelist entry [$n]."
+        Remove-ItemProperty -Path $key -Name $n; Write-Mid ("Removed forcelist entry [" + $n + "].") 'Gray'
       }
     }
     $rem = (Get-Item -Path $key).GetValueNames() | Where-Object { $_ -ne '' }
     if (-not $rem) { Remove-Item -Path $key -Force }
   }
   Restart-Chrome
-  Write-Host "Force-install policy removed." -ForegroundColor Green
-  Read-Host "Press Enter to finish"
+  Write-Host ''
+  Write-Mid 'Force-install policy removed.' 'Green'
 }
 
 # ---- main ----
 [Net.ServicePointManager]::SecurityProtocol = `
   [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-$payload = Get-Payload
+Set-ConsoleFont
 
-if (-not $Mode) {
-  try { $Host.UI.RawUI.WindowTitle = '1Password 4  -  MV3 port installer' } catch {}
-  Clear-Host
-  $bar   = '  +' + ('=' * 60) + '+'
-  $title = '1Password 4  -  MV3 port  (installer)'
-  $pad   = 60 - $title.Length; $lp = [int]($pad / 2); $rp = $pad - $lp
-  Write-Host ""
-  Write-Host $bar -ForegroundColor Cyan
-  Write-Host '  |' -ForegroundColor Cyan -NoNewline
-  Write-Host ((' ' * $lp) + $title + (' ' * $rp)) -ForegroundColor White -NoNewline
-  Write-Host '|' -ForegroundColor Cyan
-  Write-Host $bar -ForegroundColor Cyan
-  Write-Host ""
-  Write-Host "   [1] " -ForegroundColor Green  -NoNewline; Write-Host "Load unpacked   " -NoNewline
-  Write-Host "recommended - any PC, no admin" -ForegroundColor DarkGray
-  Write-Host "   [2] " -ForegroundColor Yellow -NoNewline; Write-Host "Force install   " -NoNewline
-  Write-Host "no dev-mode nag, ENTERPRISE-MANAGED only" -ForegroundColor DarkGray
-  Write-Host "   [3] " -ForegroundColor Yellow -NoNewline; Write-Host "Uninstall       " -NoNewline
-  Write-Host "remove the force-install policy" -ForegroundColor DarkGray
-  Write-Host "   [Q] " -ForegroundColor DarkGray -NoNewline; Write-Host "Quit"
-  Write-Host ""
-  switch ((Read-Host "  Choose").Trim().ToLower()) {
-    '1' { $Mode = 'unpacked' }
-    '2' { $Mode = 'force' }
-    '3' { $Mode = 'uninstall' }
-    default { return }
+# Elevated / non-interactive single action (set by -Mode when self-elevating).
+if ($Mode) {
+  try { $Host.UI.RawUI.WindowTitle = '1Password 4 Legacy Ext - MV3 Port' } catch {}
+  $payload = Get-Payload
+  switch ($Mode) {
+    'force'     { Install-Force     $payload }
+    'unpacked'  { Install-Unpacked  $payload }
+    'uninstall' { Uninstall-Force   $payload }
   }
+  Write-Host ''
+  Read-Host ((' ' * (Get-Margin)) + 'Press Enter to close') | Out-Null
+  return
 }
-switch ($Mode) {
-  'force'     { Install-Force     $payload }
-  'unpacked'  { Install-Unpacked  $payload }
-  'uninstall' { Uninstall-Force   $payload }
+
+# Interactive: dedicated-window menu that loops until [0] Quit.
+try { $Host.UI.RawUI.WindowTitle = '1Password 4 Legacy Ext - MV3 Port' } catch {}
+try {
+  $payload = Get-Payload
+} catch {
+  Write-Host ''
+  Write-Mid ('Error: ' + $_.Exception.Message) 'Red'
+  Read-Host ((' ' * (Get-Margin)) + 'Press Enter to close') | Out-Null
+  return
+}
+
+while ($true) {
+  Clear-Host
+  $inner = 60
+  $bar   = '+' + ('=' * $inner) + '+'
+  $title = '1Password 4 Legacy Ext - MV3 Port'
+  $tp    = $inner - $title.Length; $lp = [int]($tp / 2); $rp = $tp - $lp
+  Write-Host ''
+  Write-Mid $bar 'Cyan'
+  Write-MidSeg @( @{T = '|'; C = 'Cyan' }, @{T = (' ' * $lp) + $title + (' ' * $rp); C = 'White' }, @{T = '|'; C = 'Cyan' } )
+  Write-Mid $bar 'Cyan'
+  Write-Host ''
+  $rows = @(
+    @{ Key = '[1]'; KeyColor = 'Green';  Label = 'Load unpacked'; Hint = 'recommended - any PC, no admin' },
+    @{ Key = '[2]'; KeyColor = 'Yellow'; Label = 'Force install'; Hint = 'no dev-mode nag, managed devices only' },
+    @{ Key = '[3]'; KeyColor = 'Yellow'; Label = 'Uninstall';     Hint = 'remove the force-install policy' },
+    @{ Key = '[0]'; KeyColor = 'Red';    Label = 'Quit';          Hint = '' }
+  )
+  $labelW = 15; $first = $true
+  foreach ($r in $rows) {
+    if (-not $first) { Write-Host '' }   # blank line = ~1 line gap (a console's minimum step)
+    $first = $false
+    Write-Host (' ' * (Get-Margin)) -NoNewline
+    Write-Host $r.Key -ForegroundColor $r.KeyColor -NoNewline
+    Write-Host (' ' + $r.Label.PadRight($labelW)) -ForegroundColor White -NoNewline
+    Write-Host $r.Hint -ForegroundColor Gray
+  }
+  Write-Host ''
+  $choice = (Read-Host ((' ' * (Get-Margin)) + 'Choose')).Trim().ToLower()
+  if ($choice -eq '0' -or $choice -eq 'q') { break }
+  if ($choice -notin '1', '2', '3') { continue }
+  try {
+    switch ($choice) {
+      '1' { Install-Unpacked $payload }
+      '2' { Install-Force    $payload }
+      '3' { Uninstall-Force  $payload }
+    }
+  } catch {
+    Write-Host ''
+    Write-Mid ('Error: ' + $_.Exception.Message) 'Red'
+  }
+  Write-Host ''
+  Read-Host ((' ' * (Get-Margin)) + 'Press Enter to return to the menu') | Out-Null
 }

@@ -242,7 +242,7 @@ pairs under its own extension ID, so they run concurrently.
 
 ## Changelog
 
-See [`CHANGELOG.md`](CHANGELOG.md). Current release: **1.2.0**.
+See [`CHANGELOG.md`](CHANGELOG.md). Current release: **1.3.0**.
 
 ## License
 

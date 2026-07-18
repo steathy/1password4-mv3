@@ -5,6 +5,30 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). (The version here is the *port's*
 release version; the bundled extension keeps its own `4.7.5.90` manifest version.)
 
+## [1.3.0] - 2026-07-18
+
+### Changed
+- **Installer UI overhaul.** The dedicated installer window is now a centered panel — the
+  whole block is centered (like `margin: 0 auto`) with content left-aligned inside — with
+  a larger console font (~25%, via the Win32 console-font API), a blank line between menu
+  options, and a red **[0] Quit** (moved off `Q`, which sat too close to 1/2/3). The window
+  title/heading is now "1Password 4 Legacy Ext - MV3 Port", and the Force-install and
+  Uninstall screens share the same centered panel.
+- **The menu loops.** After each install/uninstall it returns to the main menu; the window
+  closes only when you pick **[0] Quit** (no more run-once-then-exit).
+
+### Added
+- **Guided 5-step Load-unpacked wizard.** One screen at a time (Enter/y to advance):
+  (1) pick your browser — Chrome / Edge / Vivaldi / Opera / Brave / Other; (2) its
+  extensions URL (e.g. `chrome://extensions`) is copied to the clipboard to paste into the
+  address bar; (3) turn on Developer mode; (4) the extension folder path is copied to the
+  clipboard for the Load-unpacked picker; (5) restart the browser — the installer can close
+  and reopen the chosen browser for you (by process name), or you do it manually.
+- **Cached download with a fingerprint check.** When run via `irm | iex`, the installer
+  stores the branch-head commit SHA next to its cached copy and, on later runs, re-downloads
+  only if GitHub's head SHA changed — otherwise it reuses the cache (and reuses it offline
+  when the API can't be reached).
+
 ## [1.2.0] - 2026-07-17
 
 ### Added
@@ -128,6 +152,7 @@ on 1Password 4.6.1.618 (Windows 10).
   native-messaging host on Windows, so the native-messaging attempt always falls
   back — cosmetic, no performance impact.
 
+[1.3.0]: https://github.com/steathy/1password4-mv3/releases/tag/v1.3.0
 [1.2.0]: https://github.com/steathy/1password4-mv3/releases/tag/v1.2.0
 [1.1.0]: https://github.com/steathy/1password4-mv3/releases/tag/v1.1.0
 [1.0.3]: https://github.com/steathy/1password4-mv3/releases/tag/v1.0.3
