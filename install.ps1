@@ -35,6 +35,24 @@ $RawBase    = "https://raw.githubusercontent.com/$Owner/$Repo/$Branch"
 # devices; on a normal personal PC it is blocked, so load-unpacked is the default.
 $UpdateUrl  = "$RawBase/dist/updates.xml"
 
+# ---- MAS-style dedicated window --------------------------------------------
+# Run the interactive menu in its own console window (like Microsoft Activation
+# Scripts) for a clean, correctly-sized, colored UI even when launched via
+# `irm | iex`. Re-entry is guarded by OP4_WIN=1; the self-elevation path already
+# opens its own window and passes -Mode, so it does not double up here.
+if (-not $Mode -and $env:OP4_WIN -ne '1') {
+  $reenter = if ($PSCommandPath) {
+    "& '" + ($PSCommandPath -replace "'", "''") + "'"
+  } else {
+    "irm '$RawBase/install.ps1' | iex"
+  }
+  Start-Process -FilePath 'powershell.exe' -ArgumentList @(
+    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-NoExit', '-Command',
+    "`$env:OP4_WIN='1'; $reenter"
+  ) | Out-Null
+  return
+}
+
 function Test-Managed {
   # Chrome allows off-Web-Store force-install only on enterprise-managed devices.
   try { if ((Get-CimInstance Win32_ComputerSystem -ErrorAction Stop).PartOfDomain) { return $true } } catch {}
@@ -166,7 +184,7 @@ function Install-Force($payload) {
   Restart-Chrome
   Write-Host "chrome://extensions should show 'Installed by policy'; it re-pairs once."
   Write-Host "If not: chrome://policy -> Reload policies, or fully quit + reopen Chrome."
-  Read-Host "Press Enter to close"
+  Read-Host "Press Enter to finish"
 }
 function Install-Unpacked($payload) {
   $src = Join-Path $payload 'src'
@@ -189,11 +207,15 @@ function Install-Unpacked($payload) {
   Write-Host "  2) Turn ON 'Developer mode' (top-right toggle). One-time - it stays on."
   Write-Host "  3) Click 'Load unpacked'. In the folder picker press Ctrl+V (the path is"
   Write-Host "     already on your clipboard), then Enter."
+  Write-Host "  4) " -NoNewline; Write-Host "Fully quit and reopen your browser" -ForegroundColor Yellow -NoNewline
+  Write-Host " to finish first-time pairing."
+  Write-Host "     A plain 'Reload' on the extensions page is NOT enough - close every" -ForegroundColor Yellow
+  Write-Host "     window of the browser, then start it again. You only do this once." -ForegroundColor Yellow
   Write-Host ""
   Write-Host "  Extension folder (also on clipboard):"
   Write-Host "    $src" -ForegroundColor Cyan
   Write-Host "  Keep that folder where it is - your browser loads it from there each launch."
-  Read-Host "Press Enter to close"
+  Read-Host "Press Enter to finish"
 }
 function Uninstall-Force($payload) {
   if (-not (Test-Admin)) { Invoke-Elevated $payload 'uninstall'; return }
@@ -212,7 +234,7 @@ function Uninstall-Force($payload) {
   }
   Restart-Chrome
   Write-Host "Force-install policy removed." -ForegroundColor Green
-  Read-Host "Press Enter to close"
+  Read-Host "Press Enter to finish"
 }
 
 # ---- main ----
@@ -221,14 +243,27 @@ function Uninstall-Force($payload) {
 $payload = Get-Payload
 
 if (-not $Mode) {
+  try { $Host.UI.RawUI.WindowTitle = '1Password 4  -  MV3 port installer' } catch {}
+  Clear-Host
+  $bar   = '  +' + ('=' * 60) + '+'
+  $title = '1Password 4  -  MV3 port  (installer)'
+  $pad   = 60 - $title.Length; $lp = [int]($pad / 2); $rp = $pad - $lp
   Write-Host ""
-  Write-Host "  1Password 4  -  MV3 port for Chrome"
-  Write-Host "  ----------------------------------"
-  Write-Host "  [1] Load unpacked   (recommended; works on any PC, no admin)"
-  Write-Host "  [2] Force install   (no dev-mode nag, but ENTERPRISE-MANAGED devices only)"
-  Write-Host "  [3] Uninstall       (remove force-install policy)"
-  Write-Host "  [Q] Quit"
-  switch ((Read-Host "Choose").Trim().ToLower()) {
+  Write-Host $bar -ForegroundColor Cyan
+  Write-Host '  |' -ForegroundColor Cyan -NoNewline
+  Write-Host ((' ' * $lp) + $title + (' ' * $rp)) -ForegroundColor White -NoNewline
+  Write-Host '|' -ForegroundColor Cyan
+  Write-Host $bar -ForegroundColor Cyan
+  Write-Host ""
+  Write-Host "   [1] " -ForegroundColor Green  -NoNewline; Write-Host "Load unpacked   " -NoNewline
+  Write-Host "recommended - any PC, no admin" -ForegroundColor DarkGray
+  Write-Host "   [2] " -ForegroundColor Yellow -NoNewline; Write-Host "Force install   " -NoNewline
+  Write-Host "no dev-mode nag, ENTERPRISE-MANAGED only" -ForegroundColor DarkGray
+  Write-Host "   [3] " -ForegroundColor Yellow -NoNewline; Write-Host "Uninstall       " -NoNewline
+  Write-Host "remove the force-install policy" -ForegroundColor DarkGray
+  Write-Host "   [Q] " -ForegroundColor DarkGray -NoNewline; Write-Host "Quit"
+  Write-Host ""
+  switch ((Read-Host "  Choose").Trim().ToLower()) {
     '1' { $Mode = 'unpacked' }
     '2' { $Mode = 'force' }
     '3' { $Mode = 'uninstall' }

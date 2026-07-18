@@ -5,6 +5,22 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). (The version here is the *port's*
 release version; the bundled extension keeps its own `4.7.5.90` manifest version.)
 
+## [1.2.0] - 2026-07-17
+
+### Added
+- **Installer runs in its own window (MAS-style).** `install.ps1` now relaunches into a
+  dedicated console window with a colored, boxed menu instead of running inline in the
+  calling shell, so the interactive menu is clean and correctly sized even when started
+  via `irm | iex`. A re-entry guard (`OP4_WIN=1`) ensures it opens exactly one window;
+  the self-elevation path is unaffected. The box and colors are drawn with plain ASCII +
+  `Write-Host -ForegroundColor` (no Unicode) to stay safe under Windows PowerShell 5.1.
+- **"Restart your browser" is now called out everywhere.** First-time pairing only
+  completes after a full browser restart — a plain extension *Reload* restarts just the
+  service worker, not the browser's connection to the desktop app, so it isn't enough.
+  The installer's load-unpacked steps, `seed-op4.ps1`, the README, and the post-pair
+  `paired.html` "Connected" page now all tell you to fully quit and reopen the browser
+  once.
+
 ## [1.1.0] - 2026-07-17
 
 ### Fixed
@@ -112,6 +128,7 @@ on 1Password 4.6.1.618 (Windows 10).
   native-messaging host on Windows, so the native-messaging attempt always falls
   back — cosmetic, no performance impact.
 
+[1.2.0]: https://github.com/steathy/1password4-mv3/releases/tag/v1.2.0
 [1.1.0]: https://github.com/steathy/1password4-mv3/releases/tag/v1.1.0
 [1.0.3]: https://github.com/steathy/1password4-mv3/releases/tag/v1.0.3
 [1.0.2]: https://github.com/steathy/1password4-mv3/releases/tag/v1.0.2

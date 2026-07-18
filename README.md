@@ -76,10 +76,14 @@ authorizes — so native messaging should work with no further setup.
 3. Open your browser's extensions page — `chrome://extensions` (Chrome),
    `edge://extensions` (Edge), etc. — and enable **Developer mode**.
 4. **Load unpacked** → select this repo's [`src/`](src/) folder.
-5. Click **service worker** (the link on the extension's card) to open its DevTools
+5. **Fully quit and reopen your browser.** First-time pairing only completes after a
+   cold start — a plain **Reload** on the extensions page restarts just the service
+   worker, not the browser's connection to the app, so it isn't enough. Close every
+   window of the browser, then start it again. You only do this once.
+6. Click **service worker** (the link on the extension's card) to open its DevTools
    console. You should see `[1P-MV3] engine loaded` and, shortly after,
    `[CHROME]: Established connection to 1Password`.
-6. Go to a login page you have saved and confirm inline fill / the toolbar button
+7. Go to a login page you have saved and confirm inline fill / the toolbar button
    fills. Save a new login to confirm the round trip.
 
 You can load the same `src/` folder in more than one browser at once (Chrome **and**
@@ -119,10 +123,10 @@ Set-ItemProperty -Path 'HKCU:\Software\AgileBits\1Password 4' -Name 'VerifyCodeS
 Stop-Process -Name 1Password,Agile1pAgent -Force   # the agent re-reads it only on restart
 ```
 
-Then reopen and unlock 1Password 4 (it relaunches the agent) and reload the
-extension. Note the agent is a **separate, long-lived process** — quitting
-1Password alone does not restart it, so the setting won't take effect until you
-kill the agent too.
+Then reopen and unlock 1Password 4 (it relaunches the agent) and **fully quit and
+reopen your browser** — a plain extension reload isn't enough for the first pair.
+Note the agent is a **separate, long-lived process** — quitting 1Password alone does
+not restart it, so the setting won't take effect until you kill the agent too.
 
 ### Force install on a personal PC
 
@@ -238,7 +242,7 @@ pairs under its own extension ID, so they run concurrently.
 
 ## Changelog
 
-See [`CHANGELOG.md`](CHANGELOG.md). Current release: **1.1.0**.
+See [`CHANGELOG.md`](CHANGELOG.md). Current release: **1.2.0**.
 
 ## License
 

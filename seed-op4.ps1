@@ -44,8 +44,11 @@ Start-Sleep -Seconds 2
 Write-Host ""
 Write-Host "Done. Now:" -ForegroundColor Cyan
 Write-Host "  1) Start 1Password 4 and UNLOCK it (it relaunches the agent)."
-Write-Host "  2) In your browser (Chrome, Edge, or another Chromium browser), reload the"
-Write-Host "     extension and watch the service worker console for"
+Write-Host "  2) " -NoNewline; Write-Host "Fully quit and reopen your browser" -ForegroundColor Yellow -NoNewline
+Write-Host " (Chrome, Edge, or another"
+Write-Host "     Chromium browser). A plain extension 'Reload' is NOT enough for the"
+Write-Host "     first pairing - close every browser window, then start it again."
+Write-Host "  3) The service worker console should then show"
 Write-Host "     '[CHROME]: Established connection to 1Password'."
 Write-Host ""
 Write-Host "----- to undo later -----" -ForegroundColor DarkGray
